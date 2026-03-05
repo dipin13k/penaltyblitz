@@ -3,7 +3,7 @@ import { ReactNode, useEffect } from "react";
 import { base } from "wagmi/chains";
 import { OnchainKitProvider } from "@coinbase/onchainkit";
 import "@coinbase/onchainkit/styles.css";
-import { WagmiProvider, useReconnect } from "wagmi";
+import { WagmiProvider, useReconnect, useConnect } from "wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { wagmiConfig } from "./lib/wagmi";
 
@@ -11,9 +11,25 @@ const queryClient = new QueryClient();
 
 function AutoReconnect() {
   const { reconnect } = useReconnect()
+  const { connect, connectors } = useConnect()
+
   useEffect(() => {
-    reconnect()
+    const init = async () => {
+      reconnect()
+
+      setTimeout(() => {
+        const farcasterConnector = connectors.find(
+          c => c.id === 'farcasterMiniApp'
+        )
+        if (farcasterConnector) {
+          console.log('Connecting farcaster connector...')
+          connect({ connector: farcasterConnector })
+        }
+      }, 500)
+    }
+    init()
   }, [])
+
   return null
 }
 

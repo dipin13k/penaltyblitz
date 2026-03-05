@@ -3,6 +3,7 @@ import { RootProvider } from './rootProvider'
 import './globals.css'
 import WalletSetup from './WalletSetup'
 import { HiddenWalletButton } from './HiddenWalletButton'
+import { FarcasterInit } from './FarcasterInit'
 
 export const metadata: Metadata = {
   title: 'Penalty Blitz',
@@ -29,6 +30,7 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <RootProvider>
+          <FarcasterInit />
           {children}
           <WalletSetup />
           <HiddenWalletButton />
