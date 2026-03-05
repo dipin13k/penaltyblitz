@@ -30,6 +30,32 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  if (window.ReactNativeWebView || 
+                      window.location !== window.parent.location ||
+                      navigator.userAgent.includes('Warpcast') ||
+                      navigator.userAgent.includes('FarcasterApp')) {
+                    var checkSdk = setInterval(function() {
+                      if (window.__farcasterSdk && 
+                          window.__farcasterSdk.actions && 
+                          window.__farcasterSdk.actions.ready) {
+                        window.__farcasterSdk.actions.ready();
+                        clearInterval(checkSdk);
+                      }
+                    }, 50);
+                    setTimeout(function() {
+                      clearInterval(checkSdk);
+                    }, 3000);
+                  }
+                } catch(e) {}
+              })();
+            `
+          }}
+        />
         <RootProvider>
           <FarcasterInit />
           {children}
