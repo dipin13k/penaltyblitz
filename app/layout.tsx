@@ -55,6 +55,23 @@ export default function RootLayout({
           <WalletSetup />
           <HiddenWalletButton />
         </RootProvider>
+        <script src="https://cdn.jsdelivr.net/npm/@farcaster/miniapp-sdk/dist/index.min.js"></script>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                function callReady() {
+                  if (window.miniapp && window.miniapp.sdk) {
+                    window.miniapp.sdk.actions.ready();
+                  } else {
+                    setTimeout(callReady, 100);
+                  }
+                }
+                callReady();
+              })();
+            `
+          }}
+        />
       </body>
     </html>
   )
