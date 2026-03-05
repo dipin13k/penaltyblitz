@@ -794,7 +794,10 @@ function initGame() {
     
     if(isWin) spawnConfetti();
 
+    console.log('endGame called, wallet:', S.wallet, 'username:', S.username, 'isWin:', isWin)
+
     if (S.wallet && S.username) {
+      console.log('calling saveMatchResult...')
       saveMatchResult(isWin);
       cachedLeaderboardData = null;
       leaderboardCacheTime = 0;
