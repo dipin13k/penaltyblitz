@@ -10,11 +10,12 @@
     "subtitle": "Penalty kick game on Base",
     "description": "Compete in penalty shootouts, save stats onchain, and climb the global leaderboard",
     "homeUrl": "https://penaltyblitz.vercel.app",
-    "iconUrl": "https://penaltyblitz.vercel.app/icon-300x300.png",
-    "splashImageUrl": "https://penaltyblitz.vercel.app/splash-200x200.png",
+    "iconUrl": "https://penaltyblitz.vercel.app/icon.png",
+    "splashImageUrl": "https://penaltyblitz.vercel.app/splash.png",
     "splashBackgroundColor": "#1a1a1a",
     "screenshotUrls": [
-      "https://penaltyblitz.vercel.app/screenshot-1284x2778.png"
+      "https://penaltyblitz.vercel.app/screenshot1.png",
+      "https://penaltyblitz.vercel.app/screenshot2.png"
     ],
     "primaryCategory": "games",
     "tags": ["game", "fun", "football"],
