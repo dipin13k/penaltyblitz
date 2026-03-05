@@ -29,33 +29,26 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>
+      <head>
+        <script src="https://cdn.jsdelivr.net/npm/@farcaster/miniapp-sdk/dist/index.min.js"></script>
         <script
           dangerouslySetInnerHTML={{
             __html: `
               (function() {
-                try {
-                  if (window.ReactNativeWebView || 
-                      window.location !== window.parent.location ||
-                      navigator.userAgent.includes('Warpcast') ||
-                      navigator.userAgent.includes('FarcasterApp')) {
-                    var checkSdk = setInterval(function() {
-                      if (window.__farcasterSdk && 
-                          window.__farcasterSdk.actions && 
-                          window.__farcasterSdk.actions.ready) {
-                        window.__farcasterSdk.actions.ready();
-                        clearInterval(checkSdk);
-                      }
-                    }, 50);
-                    setTimeout(function() {
-                      clearInterval(checkSdk);
-                    }, 3000);
+                function callReady() {
+                  if (window.miniapp && window.miniapp.sdk) {
+                    window.miniapp.sdk.actions.ready();
+                  } else {
+                    setTimeout(callReady, 100);
                   }
-                } catch(e) {}
+                }
+                callReady();
               })();
             `
           }}
         />
+      </head>
+      <body>
         <RootProvider>
           <FarcasterInit />
           {children}
