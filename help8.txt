@@ -1,0 +1,17 @@
+﻿[92m
+Usage:
+npm create-onchain [options]
+
+Creates an OnchainKit project based on nextJs.
+
+Options:
+--version: Show version
+--mini: Create the MiniKit template
+--template=<template>: Create a specific template
+--manifest: Generate your Mini-App manifest
+--help: Show help
+
+Available Templates:
+- onchainkit-nextjs: Create a basic OnchainKit project
+- minikit-nextjs: Create a MiniKit project
+[39m

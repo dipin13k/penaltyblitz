@@ -1,0 +1,14 @@
+{
+  "miniapp": {
+    "version": "1",
+    "name": "Penalty Blitz",
+    "subtitle": "Penalty Kick Game",
+    "description": "A penalty kick game onchain on Base",
+    "iconUrl": "https://penaltyblitz.vercel.app/icon.png",
+    "splashImageUrl": "https://penaltyblitz.vercel.app/splash.png",
+    "splashBackgroundColor": "#1a1a2e",
+    "homeUrl": "https://penaltyblitz.vercel.app",
+    "primaryCategory": "games",
+    "tags": ["game", "arcade", "sports"]
+  }
+}
