@@ -1,13 +1,21 @@
 "use client";
-import { ReactNode } from "react";
+import { ReactNode, useEffect } from "react";
 import { base } from "wagmi/chains";
 import { OnchainKitProvider } from "@coinbase/onchainkit";
 import "@coinbase/onchainkit/styles.css";
-import { WagmiProvider } from "wagmi";
+import { WagmiProvider, useReconnect } from "wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { wagmiConfig } from "./lib/wagmi";
 
 const queryClient = new QueryClient();
+
+function ReconnectOnMount() {
+  const { reconnect } = useReconnect();
+  useEffect(() => {
+    reconnect();
+  }, [reconnect]);
+  return null;
+}
 
 export function RootProvider({ children }: { children: ReactNode }) {
   return (
@@ -29,6 +37,7 @@ export function RootProvider({ children }: { children: ReactNode }) {
             enabled: true,
           }}
         >
+          <ReconnectOnMount />
           {children}
         </OnchainKitProvider>
       </QueryClientProvider>
