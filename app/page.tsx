@@ -793,18 +793,48 @@ function initGame() {
     if(cs) cs.innerText = S.matchStats.saves.toString();
     
     if(isWin) spawnConfetti();
+
+    if (S.wallet && S.username) {
+      saveMatchResult(isWin);
+      cachedLeaderboardData = null;
+      leaderboardCacheTime = 0;
+    }
   }
 
   async function saveMatchResult(isWin: boolean) {
-    if (!S.wallet) return;
+    console.log('=== saveMatchResult called ===')
+    console.log('wallet:', S.wallet)
+    console.log('isWin:', isWin)
+    console.log('goals:', S.matchStats.goals)
+    console.log('saves:', S.matchStats.saves)
+
+    if (!S.wallet) {
+      console.log('NO WALLET — aborting save')
+      return
+    }
+    if (!S.username) {
+      console.log('NO USERNAME — aborting save')
+      return
+    }
+
     try {
-      await supabase.rpc('upsert_player_stats', {
-        p_wallet: S.wallet,
-        p_is_win: isWin,
-        p_goals: S.matchStats.goals,
-        p_saves: S.matchStats.saves
-      });
-    } catch(e) {}
+      const result = await supabase.rpc(
+        'upsert_player_stats', {
+          p_wallet: S.wallet,
+          p_is_win: isWin,
+          p_goals: S.matchStats.goals,
+          p_saves: S.matchStats.saves
+        }
+      )
+      console.log('Supabase RPC result:', result)
+      if (result.error) {
+        console.error('Supabase error:', result.error)
+      } else {
+        console.log('Stats saved successfully!')
+      }
+    } catch(e) {
+      console.error('saveMatchResult exception:', e)
+    }
   }
 
   ;(window as any).onPlayAgain = () => (window as any).startGame(S.diff);
