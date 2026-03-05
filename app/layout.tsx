@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Script from 'next/script'
 import { RootProvider } from './rootProvider'
 import './globals.css'
 import WalletSetup from './WalletSetup'
@@ -30,23 +31,6 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <script src="https://cdn.jsdelivr.net/npm/@farcaster/miniapp-sdk/dist/index.min.js"></script>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function() {
-                function callReady() {
-                  if (window.miniapp && window.miniapp.sdk) {
-                    window.miniapp.sdk.actions.ready();
-                  } else {
-                    setTimeout(callReady, 100);
-                  }
-                }
-                callReady();
-              })();
-            `
-          }}
-        />
       </head>
       <body>
         <RootProvider>
@@ -55,8 +39,13 @@ export default function RootLayout({
           <WalletSetup />
           <HiddenWalletButton />
         </RootProvider>
-        <script src="https://cdn.jsdelivr.net/npm/@farcaster/miniapp-sdk/dist/index.min.js"></script>
-        <script
+        <Script
+          src="https://cdn.jsdelivr.net/npm/@farcaster/miniapp-sdk/dist/index.min.js"
+          strategy="beforeInteractive"
+        />
+        <Script
+          id="farcaster-ready"
+          strategy="afterInteractive"
           dangerouslySetInnerHTML={{
             __html: `
               (function() {

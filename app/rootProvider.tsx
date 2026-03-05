@@ -28,7 +28,7 @@ function AutoReconnect() {
       }, 500)
     }
     init()
-  }, [])
+  }, [reconnect, connect, connectors])
 
   return null
 }
