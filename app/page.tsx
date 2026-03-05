@@ -706,13 +706,24 @@ function initGame() {
       let rot = 0;
       S.arrowPos = 50;
       if(S.pLoopId) clearInterval(S.pLoopId);
+      
+      const arrowSpeed = 
+        S.diff === 'easy' ? 1.5 :
+        S.diff === 'medium' ? 3.5 :
+        6;
+      
+      const arrowMs = 
+        S.diff === 'easy' ? 1000/30 :
+        S.diff === 'medium' ? 1000/45 :
+        1000/60;
+      
       S.pLoopId = safeSetInterval(() => {
-        rot += 6 * dir;
+        rot += arrowSpeed * dir;
         if(rot >= 70) { rot = 70; dir = -1; }
         if(rot <= -70) { rot = -70; dir = 1; }
         sw.style.left = `calc(50% + ${rot}px - 16px)`;
         S.arrowPos = ((rot + 70) / 140) * 100;
-      }, 1000/C.FPS);
+      }, arrowMs);
     }
     
     S.busy = false;
@@ -750,16 +761,22 @@ function initGame() {
   };
 
   function resolveAiShot(playerDiveDir: 'left'|'center'|'right', arrowZone: 'left'|'center'|'right') {
-    const dirs = ['left','center','right'];
-    const aiChoice = dirs[Math.floor(Math.random()*3)];
+    const aiShotDir = arrowZone;
+    
+    let actualShotDir = aiShotDir;
+    if (S.diff === 'hard' && Math.random() < 0.25) {
+      const others = ['left','center','right'].filter(d => d !== aiShotDir);
+      actualShotDir = others[Math.floor(Math.random() * others.length)] as 'left'|'center'|'right';
+      console.log('Hard mode feint! Arrow:', aiShotDir, 'Actual:', actualShotDir);
+    }
     
     const net = el('net');
     const app = el('app');
     const rect = net?.getBoundingClientRect() || {width:200,height:172};
     
     let targetLocalX: number;
-    if(aiChoice === 'left') targetLocalX = rect.width * 0.2;
-    else if(aiChoice === 'right') targetLocalX = rect.width * 0.8;
+    if(actualShotDir === 'left') targetLocalX = rect.width * 0.2;
+    else if(actualShotDir === 'right') targetLocalX = rect.width * 0.8;
     else targetLocalX = rect.width * 0.5;
     const targetLocalY = rect.height * 0.35;
     
@@ -784,7 +801,7 @@ function initGame() {
       ball.style.top = ty + 'px';
       ball.style.transform = 'scale(0.3) rotate(360deg)';
       
-      const isSave = aiChoice === playerDiveDir;
+      const isSave = actualShotDir === playerDiveDir;
       
       setTimeout(() => {
         if(isSave) {
