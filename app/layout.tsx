@@ -17,7 +17,8 @@ export const metadata: Metadata = {
       splashBackgroundColor: '#1a1a2e',
       homeUrl: 'https://penaltyblitz.vercel.app',
       buttonTitle: '⚽ Play Now'
-    })
+    }),
+    'base:app_id': '69a954df0050dd24efcc1e3a'
   }
 }
 
