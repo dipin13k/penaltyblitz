@@ -1,25 +1,29 @@
 {
-  "frame": {
-    "name": "Penalty Blitz",
+  "accountAssociation": {
+    "header": "",
+    "payload": "",
+    "signature": ""
+  },
+  "miniapp": {
     "version": "1",
-    "iconUrl": "https://penaltyblitz.vercel.app/icon.png",
-    "homeUrl": "https://penaltyblitz.vercel.app",
-    "imageUrl": "https://penaltyblitz.vercel.app/image.png",
-    "splashImageUrl": "https://penaltyblitz.vercel.app/splash.png",
-    "splashBackgroundColor": "#101C3F",
-    "webhookUrl": "https://penaltyblitz.vercel.app/api/webhook",
+    "name": "Penalty Blitz",
     "subtitle": "Penalty kick game on Base",
     "description": "Compete in penalty shootouts, save stats onchain, and climb the global leaderboard",
-    "primaryCategory": "games",
+    "homeUrl": "https://penaltyblitz.vercel.app",
+    "iconUrl": "https://penaltyblitz.vercel.app/icon.png",
+    "splashImageUrl": "https://penaltyblitz.vercel.app/splash.png",
+    "splashBackgroundColor": "#1a1a1a",
     "screenshotUrls": [
-      "https://penaltyblitz.vercel.app/screenshot1.png"
+      "https://penaltyblitz.vercel.app/screenshot1.png",
+      "https://penaltyblitz.vercel.app/screenshot2.png"
     ],
+    "primaryCategory": "games",
+    "tags": ["game", "fun", "football"],
     "tagline": "Score. Save. Dominate",
-    "tags": [
-      "fun",
-      "games",
-      "football"
-    ],
-    "heroImageUrl": "https://penaltyblitz.vercel.app/hero.png"
+    "heroImageUrl": "https://penaltyblitz.vercel.app/hero.png",
+    "ogTitle": "Penalty Blitz",
+    "ogDescription": "Compete in penalty shootouts, save stats onchain, and climb the global leaderboard",
+    "ogImageUrl": "https://penaltyblitz.vercel.app/hero.png",
+    "noindex": false
   }
 }
