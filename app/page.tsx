@@ -800,7 +800,7 @@ function initGame() {
     try {
       await supabase.rpc('upsert_player_stats', {
         p_wallet: S.wallet,
-        p_is_win: isWin ? 1 : 0,
+        p_is_win: isWin,
         p_goals: S.matchStats.goals,
         p_saves: S.matchStats.saves
       });
