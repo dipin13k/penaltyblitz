@@ -3,11 +3,11 @@
     "name": "Penalty Blitz",
     "version": "1",
     "iconUrl": "https://penaltyblitz.vercel.app//icon.png",
-    "homeUrl": "https://https://penaltyblitz.vercel.app/",
+    "homeUrl": "https://penaltyblitz.vercel.app/",
     "imageUrl": "https://penaltyblitz.vercel.app//image.png",
-    "splashImageUrl": "https://https://penaltyblitz.vercel.app//splash.png",
+    "splashImageUrl": "https://penaltyblitz.vercel.app//splash.png",
     "splashBackgroundColor": "#101C3F",
-    "webhookUrl": "https://https://penaltyblitz.vercel.app//api/webhook",
+    "webhookUrl": "https://penaltyblitz.vercel.app//api/webhook",
     "subtitle": "Penalty kick game on Base",
     "description": "Compete in penalty shootouts, save stats onchain, and climb the global leaderboard",
     "screenshotUrls": [
@@ -24,7 +24,7 @@
   },
   "accountAssociation": {
     "header": "eyJmaWQiOjEwNDE1NDEsInR5cGUiOiJhdXRoIiwia2V5IjoiMHgwRTc0OUYzQWY0YUU3OTlGQjg3OUFCMUYzQ0Q3MzFlRjZBRjNjRDAwIn0",
-    "payload": "eyJkb21haW4iOiJodHRwcyJ9",
-    "signature": "urwEpz835uIQuzdeOQJ6sxh6ILwclzSyUj+sXkLKvmw7TCcNJ62iEU2yQLtk/ITMRodtRcFYcHLRFg3N0WeCdBw="
+    "payload": "eyJkb21haW4iOiJwZW5hbHR5YmxpdHoudmVyY2VsLmFwcCJ9",
+    "signature": "Gkbp94ZKI+Fkajp47oiMT9x2dCFlHnRC5p2TKdaUjeJw8XQTVHm8tmoFE2bUQhy0P8v586SmMJjio+saA523bBw="
   }
 }
