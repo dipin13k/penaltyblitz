@@ -22,14 +22,16 @@ export default function GamePage() {
   }, [setFrameReady]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && (window as unknown as { __onWalletStateChange?: (addr: string | null) => void }).__onWalletStateChange) {
-      if (!isConnected) {
-        (window as unknown as { __onWalletStateChange?: (addr: string | null) => void }).__onWalletStateChange?.(null);
+    const timer = setTimeout(() => {
+      const addr = isConnected ? (address ?? null) : null
+      if ((window as any).__onWalletStateChange) {
+        (window as any).__onWalletStateChange(addr)
       } else {
-        (window as unknown as { __onWalletStateChange?: (addr: string | null) => void }).__onWalletStateChange?.(address ?? null);
+        (window as any).__pendingWalletAddr = addr
       }
-    }
-  }, [isConnected, address]);
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [isConnected, address])
 
   useEffect(() => {
     if (!containerRef.current || document.getElementById('game-injected')) return;
@@ -145,6 +147,14 @@ function initGame() {
       if (badge) badge.innerText = address.slice(0, 6) + '...' + address.slice(-4);
     }
   };
+
+  const pending = (window as any).__pendingWalletAddr
+  if (pending !== undefined) {
+    delete (window as any).__pendingWalletAddr
+    setTimeout(() => {
+      ;(window as any).__onWalletStateChange(pending)
+    }, 100)
+  }
 
   ; (window as any).triggerWalletConnect = () => {
     if ((window as any).__triggerWalletConnect) {

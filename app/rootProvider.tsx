@@ -9,12 +9,12 @@ import { wagmiConfig } from "./lib/wagmi";
 
 const queryClient = new QueryClient();
 
-function ReconnectOnMount() {
-  const { reconnect } = useReconnect();
+function AutoReconnect() {
+  const { reconnect } = useReconnect()
   useEffect(() => {
-    reconnect();
-  }, [reconnect]);
-  return null;
+    reconnect()
+  }, [])
+  return null
 }
 
 export function RootProvider({ children }: { children: ReactNode }) {
@@ -37,7 +37,7 @@ export function RootProvider({ children }: { children: ReactNode }) {
             enabled: true,
           }}
         >
-          <ReconnectOnMount />
+          <AutoReconnect />
           {children}
         </OnchainKitProvider>
       </QueryClientProvider>
