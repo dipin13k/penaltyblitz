@@ -144,6 +144,10 @@ function initGame() {
   function el(id: string) { return document.getElementById(id); }
 
   function showScreen(id: string) {
+    const existingProfile =
+      document.getElementById('screen-profile')
+    if (existingProfile) existingProfile.remove()
+
     clearAllIntervals();
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     el(`screen-${id}`)?.classList.add('active');
@@ -1130,13 +1134,25 @@ function initGame() {
     ">
       <!-- Avatar -->
       <div style="
-        width:80px;height:80px;border-radius:50%;
-        overflow:hidden;border:3px solid #00ff88;
-        margin-bottom:12px;background:#333;
+        width:80px;
+        height:80px;
+        border-radius:50%;
+        overflow:hidden;
+        border:3px solid #00ff88;
+        background:#333;
+        flex-shrink:0;
+        margin-bottom:12px;
       ">
         ${S.avatarUrl ?
         `<img src="${S.avatarUrl}" 
-            style="width:100%;height:100%;object-fit:cover"/>` :
+            style="
+              width:100%;
+              height:100%;
+              object-fit:cover;
+              object-position:center;
+              border-radius:50%;
+              display:block;
+            "/>` :
         `<div style="width:100%;height:100%;
             display:flex;align-items:center;
             justify-content:center;font-size:32px">👤</div>`
@@ -1208,6 +1224,10 @@ function initGame() {
   }
 
   ; (window as any).switchTab = (tab: string) => {
+    const existingProfile =
+      document.getElementById('screen-profile')
+    if (existingProfile) existingProfile.remove()
+
     // Update active tab styling
     const tabs = ['play', 'leaderboard', 'profile']
     tabs.forEach(t => {
