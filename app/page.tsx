@@ -38,7 +38,7 @@ export default function GamePage() {
     return () => clearTimeout(timer)
   }, [isConnected, address])
 
-  // Two-step initialization to fix race condition
+  // Single useEffect for initialization - call initGame directly after SDK loads
   useEffect(() => {
     if (!containerRef.current || document.getElementById('game-injected')) return;
 
@@ -52,39 +52,17 @@ export default function GamePage() {
     const load = async () => {
       try {
         await sdk.actions.ready()
-        console.log('SDK ready, context available')
+        console.log('SDK ready')
         const ctx = await sdk.context
         console.log('Context user:', ctx?.user?.username)
           ; (window as any).__miniAppContext = ctx
       } catch (e) {
         console.log('SDK context failed:', e)
       }
-      // Don't call initGame() here - wait for wallet state change
-      console.log('SDK loaded, waiting for wallet state change...')
+      initGame()  // Call directly here, always
     }
     load()
   }, []);
-
-  // Second step: initialize game when wallet state is available
-  useEffect(() => {
-    if (!isConnected && !address) return;
-
-    console.log('Wallet state changed, initializing game...')
-    // Small delay to ensure __onWalletStateChange has been called
-    setTimeout(() => {
-      if (typeof (window as any).initGame === 'function') {
-        console.log('Calling initGame...')
-          ; (window as any).initGame()
-      } else {
-        console.log('initGame not available yet, waiting...')
-        setTimeout(() => {
-          if (typeof (window as any).initGame === 'function') {
-            ; (window as any).initGame()
-          }
-        }, 1000)
-      }
-    }, 500)
-  }, [isConnected, address])
 
   return (
     <div ref={containerRef} style={{
@@ -960,7 +938,7 @@ function initGame() {
 
     console.log('endGame called, wallet:', S.wallet, 'username:', S.username, 'isWin:', isWin)
 
-    if (S.wallet && S.username) {
+    if (S.wallet) {  // Remove S.username check!
       console.log('calling saveMatchResult...')
       saveMatchResult(isWin);
       cachedLeaderboardData = null;
