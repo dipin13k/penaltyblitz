@@ -21,6 +21,22 @@ export default function GamePage() {
     setFrameReady();
   }, [setFrameReady]);
 
+  // Watch wallet state and notify game
+  useEffect(() => {
+    console.log('=== wallet useEffect fired ===', 'isConnected:', isConnected, 'address:', address)
+    const timer = setTimeout(() => {
+      const addr = isConnected ? (address ?? null) : null
+      console.log('Calling __onWalletStateChange with:', addr)
+      if ((window as any).__onWalletStateChange) {
+        (window as any).__onWalletStateChange(addr)
+      } else {
+        (window as any).__pendingWalletAddr = addr
+      }
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [isConnected, address])
+
+  // Init game once on mount
   useEffect(() => {
     if (!containerRef.current || document.getElementById('game-injected')) return;
 
@@ -37,7 +53,7 @@ export default function GamePage() {
         console.log('SDK ready')
         const ctx = await sdk.context
         console.log('Context user:', ctx?.user?.username)
-          ; (window as any).__miniAppContext = ctx
+        ;(window as any).__miniAppContext = ctx
       } catch (e) {
         console.log('SDK context failed:', e)
       }
@@ -126,12 +142,6 @@ function initGame() {
     hard: { kSpeed: 0.22, pSpeed: 6.0, kReach: 40, label: 'WORLD CLASS' }
   };
 
-  const PRESET_DIVE = {
-    left: { x: -50, y: -25, r: -40 },
-    center: { x: 0, y: -40, r: 0 },
-    right: { x: 50, y: -25, r: 40 }
-  };
-
   const S = {
     wallet: null as string | null,
     fid: null as number | null,
@@ -159,17 +169,14 @@ function initGame() {
   function el(id: string) { return document.getElementById(id); }
 
   function showScreen(id: string) {
-    const existingProfile =
-      document.getElementById('screen-profile')
+    const existingProfile = document.getElementById('screen-profile')
     if (existingProfile) existingProfile.remove()
 
     clearAllIntervals();
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
 
     if (id === 'connect') {
-      // Connect screen shows nothing - just blank dark screen
-      // This allows the app to load and wait for wallet connection
-      // without showing any message
+      // blank screen - do nothing
     } else {
       el(`screen-${id}`)?.classList.add('active');
     }
@@ -187,7 +194,7 @@ function initGame() {
     }
   }
 
-  ; (window as any).showScreen = showScreen;
+  ;(window as any).showScreen = showScreen;
 
   async function getFarcasterIdentity(): Promise<{
     fid: number | null
@@ -196,8 +203,7 @@ function initGame() {
   }> {
     const ctx = (window as any).__miniAppContext
     if (ctx?.user) {
-      console.log('Identity from SDK context:',
-        ctx.user.username)
+      console.log('Identity from SDK context:', ctx.user.username)
       return {
         fid: ctx.user.fid || null,
         username: ctx.user.username || null,
@@ -208,9 +214,7 @@ function initGame() {
     return { fid: null, username: null, avatarUrl: null }
   }
 
-  ; (window as any).__onWalletStateChange = async (
-    address: string | null
-  ) => {
+  ;(window as any).__onWalletStateChange = async (address: string | null) => {
     const loadingEl = document.getElementById('screen-loading')
     if (loadingEl) loadingEl.remove()
 
@@ -230,95 +234,52 @@ function initGame() {
     if (!S.fid || !S.username) {
       console.log('Trying Neynar for full identity...')
       const neynarIdentity = await getIdentityFromWallet(address)
-
-      // Only override if we got better data from Neynar
       if (neynarIdentity.fid) S.fid = neynarIdentity.fid
-      if (!S.username && neynarIdentity.username)
-        S.username = neynarIdentity.username
-      if (!S.avatarUrl && neynarIdentity.avatarUrl)
-        S.avatarUrl = neynarIdentity.avatarUrl
-
-      console.log('Final identity:',
-        'fid:', S.fid,
-        'username:', S.username,
-        'avatar:', !!S.avatarUrl)
+      if (!S.username && neynarIdentity.username) S.username = neynarIdentity.username
+      if (!S.avatarUrl && neynarIdentity.avatarUrl) S.avatarUrl = neynarIdentity.avatarUrl
     }
 
-    console.log('Identity resolved:',
-      'fid:', S.fid,
-      'username:', S.username,
-      'wallet:', address)
+    console.log('Identity resolved:', 'fid:', S.fid, 'username:', S.username, 'wallet:', address)
 
     // Look up player by FID first, then wallet fallbacks
     let existingPlayer = null
 
     if (S.fid) {
       const { data: fidData } = await supabase
-        .from('player_profiles')
-        .select('*')
-        .eq('fid', S.fid)
-        .maybeSingle()
+        .from('player_profiles').select('*').eq('fid', S.fid).maybeSingle()
       existingPlayer = fidData
     }
-
     if (!existingPlayer) {
       const { data: w1Data } = await supabase
-        .from('player_profiles')
-        .select('*')
-        .eq('wallet_address', address)
-        .maybeSingle()
+        .from('player_profiles').select('*').eq('wallet_address', address).maybeSingle()
       existingPlayer = w1Data
     }
-
     if (!existingPlayer) {
       const { data: w2Data } = await supabase
-        .from('player_profiles')
-        .select('*')
-        .eq('wallet_address_2', address)
-        .maybeSingle()
+        .from('player_profiles').select('*').eq('wallet_address_2', address).maybeSingle()
       existingPlayer = w2Data
     }
 
     if (existingPlayer) {
-      // Returning player — update identity and
-      // store current wallet in correct slot
       const updateData: any = {
         fid: S.fid || existingPlayer.fid,
         username: S.username || existingPlayer.username,
         avatar_url: S.avatarUrl || existingPlayer.avatar_url,
       }
-
-      // Store wallet in correct slot without overwriting
-      if (existingPlayer.wallet_address === address) {
-        // Already in slot 1, no change needed
-      } else if (existingPlayer.wallet_address_2 === address) {
-        // Already in slot 2, no change needed
-      } else if (!existingPlayer.wallet_address) {
-        updateData.wallet_address = address
-      } else if (!existingPlayer.wallet_address_2) {
-        updateData.wallet_address_2 = address
+      if (existingPlayer.wallet_address !== address && existingPlayer.wallet_address_2 !== address) {
+        if (!existingPlayer.wallet_address) updateData.wallet_address = address
+        else if (!existingPlayer.wallet_address_2) updateData.wallet_address_2 = address
       }
-      // If both slots full, keep existing (don't overwrite)
-
-      await supabase
-        .from('player_profiles')
-        .update(updateData)
-        .eq('id', existingPlayer.id)
-
+      await supabase.from('player_profiles').update(updateData).eq('id', existingPlayer.id)
       showScreen('menu')
       loadMenuStats()
     } else {
-      // New player — create profile automatically
-      const { error } = await supabase
-        .from('player_profiles')
-        .insert({
-          wallet_address: address,
-          fid: S.fid,
-          username: S.username ||
-            address.slice(0, 6) + '...' + address.slice(-4),
-          avatar_url: S.avatarUrl
-        })
-
+      const { error } = await supabase.from('player_profiles').insert({
+        wallet_address: address,
+        fid: S.fid,
+        username: S.username || address.slice(0, 6) + '...' + address.slice(-4),
+        avatar_url: S.avatarUrl
+      })
       if (!error) {
         showScreen('menu')
         loadMenuStats()
@@ -332,20 +293,11 @@ function initGame() {
   if (pending !== undefined) {
     delete (window as any).__pendingWalletAddr
     setTimeout(() => {
-      ; (window as any).__onWalletStateChange(pending)
+      ;(window as any).__onWalletStateChange(pending)
     }, 100)
   }
 
-  ; (window as any).triggerWalletConnect = () => {
-    if ((window as any).__triggerWalletConnect) {
-      (window as any).__triggerWalletConnect();
-    }
-  };
-
-  ; (window as any).handleDisconnect = () => {
-    // In actual implementation we'd call wagmi disconnect hook via UI but imperative can't directly use react hooks
-    location.reload();
-  };
+  ;(window as any).handleDisconnect = () => { location.reload(); };
 
   async function loadMenuStats() {
     if (!S.wallet) return;
@@ -384,7 +336,7 @@ function initGame() {
     }
   }
 
-  ; (window as any).startGame = (diff: 'easy' | 'medium' | 'hard') => {
+  ;(window as any).startGame = (diff: 'easy' | 'medium' | 'hard') => {
     S.diff = diff;
     S.round = 1; S.pScore = 0; S.aScore = 0;
     S.isSuddenDeath = false; S.gameOver = false;
@@ -454,23 +406,16 @@ function initGame() {
     S.myTurn = true;
     resetField();
     const ind = el('turnIndicator');
-    if (ind) {
-      ind.innerText = 'YOUR TURN ⚽';
-      ind.style.color = '#00d4ff';
-    }
+    if (ind) { ind.innerText = 'YOUR TURN ⚽'; ind.style.color = '#00d4ff'; }
     el('ai-player')!.style.display = 'none';
     el('keeper')!.style.display = 'block';
-
     el('diveLeft')!.style.display = 'none';
     el('diveCenter')!.style.display = 'none';
     el('diveRight')!.style.display = 'none';
-
     S.busy = false;
-
     el('shootBtn')!.style.display = 'flex';
     el('powerBarWrap')!.style.display = 'flex';
     el('aimCursor')!.style.display = 'block';
-
     startAim();
   }
 
@@ -490,44 +435,26 @@ function initGame() {
     if (kw) kw.style.transform = 'translate(0,0) rotate(0)';
   }
 
-  const T = {
-    keeperDive: 300,
-    keeperReturn: 400,
-  };
+  const T = { keeperDive: 300, keeperReturn: 400 };
 
   function diveKeeper(dir: 'left' | 'center' | 'right') {
     const kw = el('keeper-dive-wrapper');
     if (!kw) return;
-
     kw.style.transition = `transform ${T.keeperDive}ms cubic-bezier(0.1, 0.8, 0.2, 1)`;
-
-    if (dir === 'left') {
-      kw.style.transform = 'translateX(-50px) rotate(-65deg)';
-    } else if (dir === 'right') {
-      kw.style.transform = 'translateX(50px) rotate(65deg)';
-    } else {
-      kw.style.transform = 'translateY(-30px)';
-    }
-
+    if (dir === 'left') kw.style.transform = 'translateX(-50px) rotate(-65deg)';
+    else if (dir === 'right') kw.style.transform = 'translateX(50px) rotate(65deg)';
+    else kw.style.transform = 'translateY(-30px)';
     setTimeout(() => {
       const kwr = el('keeper-dive-wrapper');
-      if (kwr) {
-        kwr.style.transition = `transform ${T.keeperReturn}ms ease-in-out`;
-        kwr.style.transform = 'none';
-      }
+      if (kwr) { kwr.style.transition = `transform ${T.keeperReturn}ms ease-in-out`; kwr.style.transform = 'none'; }
     }, T.keeperDive + 900);
-  }
-
-  function clamp(v: number, min: number, max: number) {
-    return Math.max(min, Math.min(max, v));
   }
 
   function resetCursor() {
     const net = el('net');
     if (!net) return;
-    const cw = net.getBoundingClientRect().width;
-    const ch = net.getBoundingClientRect().height;
-    S.aimX = cw / 2; S.aimY = ch * 0.8;
+    S.aimX = net.getBoundingClientRect().width / 2;
+    S.aimY = net.getBoundingClientRect().height * 0.8;
   }
 
   function startAim() {
@@ -535,23 +462,16 @@ function initGame() {
     S.aimDirX = 1; S.aimDirY = 1;
     S.pBar = 0; S.pDir = 1;
     updatePowerUI();
-
     if (S.animId) cancelAnimationFrame(S.animId);
     if (S.pLoopId) clearInterval(S.pLoopId);
-
     const d = DIFF[S.diff];
-
     S.pLoopId = safeSetInterval(() => {
       S.pBar += 2 * S.pDir;
       if (S.pBar >= 100) { S.pBar = 100; S.pDir = -1; }
       if (S.pBar <= 0) { S.pBar = 0; S.pDir = 1; }
       updatePowerUI();
     }, 1000 / C.FPS);
-
-    const loop = () => {
-      moveCursor(d.pSpeed);
-      S.animId = requestAnimationFrame(loop);
-    };
+    const loop = () => { moveCursor(d.pSpeed); S.animId = requestAnimationFrame(loop); };
     S.animId = requestAnimationFrame(loop);
   }
 
@@ -566,109 +486,73 @@ function initGame() {
     const net = el('net');
     const cursor = el('aimCursor');
     if (!net || !cursor) return;
-
     const rect = net.getBoundingClientRect();
     const w = rect.width; const h = rect.height;
-    const r = 26; // HALF OF CURSOR WIDTH
-
+    const r = 26;
     S.aimX += baseSpeed * 1.5 * S.aimDirX;
     S.aimY += baseSpeed * S.aimDirY;
-
     const fuzz = 4;
     if (S.aimX < r - fuzz) { S.aimX = r - fuzz; S.aimDirX *= -1; }
     if (S.aimX > w - (r - fuzz)) { S.aimX = w - (r - fuzz); S.aimDirX *= -1; }
     if (S.aimY < r - fuzz) { S.aimY = r - fuzz; S.aimDirY *= -1; }
     if (S.aimY > h - (r - fuzz)) { S.aimY = h - (r - fuzz); S.aimDirY *= -1; }
-
     cursor.style.left = `${S.aimX}px`;
     cursor.style.top = `${S.aimY}px`;
   }
 
-  ; (window as any).handleShoot = () => {
+  ;(window as any).handleShoot = () => {
     if (S.busy) return;
     S.busy = true;
-
     if (S.animId) cancelAnimationFrame(S.animId);
     if (S.pLoopId) clearInterval(S.pLoopId);
-
     el('shootBtn')!.style.display = 'none';
     el('powerBarWrap')!.style.display = 'none';
     el('aimCursor')!.style.display = 'none';
-
     const pwr = S.pBar;
     const net = el('net');
     const rect = net?.getBoundingClientRect() || { width: 200, height: 172 };
-
-    let fx = S.aimX / rect.width;  // 0 to 1
-    let fy = S.aimY / rect.height; // 0 to 1
-
-    if (pwr > 80) { // risky mode
+    let fx = S.aimX / rect.width;
+    let fy = S.aimY / rect.height;
+    if (pwr > 80) {
       const err = ((pwr - 80) / 20) * 0.15;
       fx += (Math.random() * err * 2) - err;
-      fy -= (Math.random() * err); // tends to go high
+      fy -= (Math.random() * err);
     }
-
-    const screenW = el('app')?.getBoundingClientRect().width || window.innerWidth;
-    const netCenterScreen = screenW / 2;
     const tx = (fx - 0.5) * rect.width;
-    const ty = -(rect.height - (fy * rect.height)) - C.KEEPER_Y;
-
     const isGoal = checkGoal(fx, fy, pwr);
-
     const shotDir: 'left' | 'center' | 'right' = tx < -20 ? 'left' : tx > 20 ? 'right' : 'center';
     diveKeeper(shotDir);
-
     const ball = el('ball');
     const app = el('app');
     if (ball && net && app) {
       const netRect = net.getBoundingClientRect();
       const appRect = app.getBoundingClientRect();
-
-      const targetX = (netRect.left - appRect.left) + S.aimX - 22;
-      const targetY = (netRect.top - appRect.top) + S.aimY - 22;
-
       ball.style.transition = 'all 0.4s ease-in';
-      ball.style.left = targetX + 'px';
-      ball.style.top = targetY + 'px';
+      ball.style.left = (netRect.left - appRect.left) + S.aimX - 22 + 'px';
+      ball.style.top = (netRect.top - appRect.top) + S.aimY - 22 + 'px';
       ball.style.transform = 'scale(0.3) rotate(360deg)';
-
-      const outLeft = fx < 0; const outRight = fx > 1; const outTop = fy < 0;
-      const isOut = outLeft || outRight || outTop;
-
+      const isOut = fx < 0 || fx > 1 || fy < 0;
       setTimeout(() => {
-        if (isOut) {
-          showText('MISS!', '#ff3535');
-        } else if (isGoal) {
-          S.pScore++;
-          S.matchStats.goals++;
-          updateScoreUI();
-          triggerNetRipple();
-          showText('GOAL!', '#00ff88');
-        } else {
-          showText('SAVED!', '#ff6b35');
-        }
+        if (isOut) showText('MISS!', '#ff3535');
+        else if (isGoal) { S.pScore++; S.matchStats.goals++; updateScoreUI(); triggerNetRipple(); showText('GOAL!', '#00ff88'); }
+        else showText('SAVED!', '#ff6b35');
       }, C.BALL_WAIT);
     }
-
-    setTimeout(() => {
-      checkRoundEnd();
-    }, C.BALL_WAIT + C.POST_SHOOT_WAIT);
+    setTimeout(() => { checkRoundEnd(); }, C.BALL_WAIT + C.POST_SHOOT_WAIT);
   };
 
   function checkGoal(fx: number, fy: number, pwr: number) {
     if (fx < 0 || fx > 1 || fy < 0) return false;
     const distToCenter = Math.abs(fx - 0.5);
     const d = DIFF[S.diff];
-
-    if (pwr >= 40 && pwr <= 80) { // strong
+    if (pwr >= 40 && pwr <= 80) {
       if (distToCenter > 0.3) return true;
       return Math.random() > d.kSpeed * 2.5;
     }
-    if (pwr < 40) { // weak
+    if (pwr < 40) {
       if (distToCenter > 0.4) return Math.random() > 0.3;
       return false;
     }
-    // risky (pwr > 80)
     return Math.random() > d.kSpeed * 1.5;
   }
 
@@ -680,13 +564,7 @@ function initGame() {
     d.style.color = color;
     d.innerText = msg;
     app.appendChild(d);
-
-    if (msg === 'GOAL!') {
-      app.style.animation = 'none';
-      void app.offsetWidth;
-      app.style.animation = 'screenShake 0.4s ease';
-    }
-
+    if (msg === 'GOAL!') { app.style.animation = 'none'; void app.offsetWidth; app.style.animation = 'screenShake 0.4s ease'; }
     setTimeout(() => d.remove(), 1100);
   }
 
@@ -707,35 +585,21 @@ function initGame() {
         const diff = Math.abs(S.pScore - S.aScore);
         if (diff > rem) over = true;
         else if (S.round === S.maxRounds) {
-          if (diff === 0) {
-            S.isSuddenDeath = true;
-            showSuddenDeath();
-            return;
-          } else over = true;
+          if (diff === 0) { S.isSuddenDeath = true; showSuddenDeath(); return; }
+          else over = true;
         }
       } else {
         if (S.pScore !== S.aScore) over = true;
       }
-
-      if (over) {
-        endGame();
-      } else {
-        S.round++;
-        showBetweenRounds(`ROUND ${S.round}`, () => {
-          beginPlayerTurn();
-        });
-      }
+      if (over) endGame();
+      else { S.round++; showBetweenRounds(`ROUND ${S.round}`, () => { beginPlayerTurn(); }); }
     }
   }
 
   function showSuddenDeath() {
     const o = el('suddenDeathOverlay');
     if (o) o.style.display = 'flex';
-    setTimeout(() => {
-      if (o) o.style.display = 'none';
-      S.round++;
-      beginPlayerTurn();
-    }, C.SUDDEN_DEATH_DUR);
+    setTimeout(() => { if (o) o.style.display = 'none'; S.round++; beginPlayerTurn(); }, C.SUDDEN_DEATH_DUR);
   }
 
   function showBetweenRounds(txt: string, cb: Function) {
@@ -747,53 +611,32 @@ function initGame() {
     s.style.animation = 'none';
     void s.offsetWidth;
     s.style.animation = 'slideUp 0.3s ease-out forwards';
-    setTimeout(() => {
-      s.style.display = 'none';
-      cb();
-    }, Math.max(800, C.END_RND_WAIT));
+    setTimeout(() => { s.style.display = 'none'; cb(); }, Math.max(800, C.END_RND_WAIT));
   }
 
   function beginAiTurn() {
     S.myTurn = false;
     resetField();
-
     const ind = el('turnIndicator');
-    if (ind) {
-      ind.innerText = 'AI TURN 🤖';
-      ind.style.color = '#ff3535';
-    }
-
+    if (ind) { ind.innerText = 'AI TURN 🤖'; ind.style.color = '#ff3535'; }
     el('keeper')!.style.display = 'block';
     el('keeper')!.style.visibility = 'visible';
     el('ai-player')!.style.display = 'flex';
     el('ai-player')!.style.animation = 'none';
-
     el('shootBtn')!.style.display = 'none';
     el('powerBarWrap')!.style.display = 'none';
     el('aimCursor')!.style.display = 'none';
-
     el('diveLeft')!.style.display = 'block';
     el('diveCenter')!.style.display = 'block';
     el('diveRight')!.style.display = 'block';
-
     const sw = el('swingArrow');
     if (sw) {
       sw.style.display = 'block';
-      let dir = 1;
-      let rot = 0;
+      let dir = 1; let rot = 0;
       S.arrowPos = 50;
       if (S.pLoopId) clearInterval(S.pLoopId);
-
-      const arrowSpeed =
-        S.diff === 'easy' ? 1.5 :
-          S.diff === 'medium' ? 3.5 :
-            6;
-
-      const arrowMs =
-        S.diff === 'easy' ? 1000 / 30 :
-          S.diff === 'medium' ? 1000 / 45 :
-            1000 / 60;
-
+      const arrowSpeed = S.diff === 'easy' ? 1.5 : S.diff === 'medium' ? 3.5 : 6;
+      const arrowMs = S.diff === 'easy' ? 1000 / 30 : S.diff === 'medium' ? 1000 / 45 : 1000 / 60;
       S.pLoopId = safeSetInterval(() => {
         rot += arrowSpeed * dir;
         if (rot >= 70) { rot = 70; dir = -1; }
@@ -802,61 +645,38 @@ function initGame() {
         S.arrowPos = ((rot + 70) / 140) * 100;
       }, arrowMs);
     }
-
     S.busy = false;
   }
 
-  ; (window as any).handleDive = (dir: 'left' | 'center' | 'right') => {
+  ;(window as any).handleDive = (dir: 'left' | 'center' | 'right') => {
     if (S.busy) return;
     S.busy = true;
-
     if (S.pLoopId) clearInterval(S.pLoopId);
     el('swingArrow')!.style.display = 'none';
-
     const capturedPos = S.arrowPos;
     let arrowZone: 'left' | 'center' | 'right';
-    if (capturedPos < 33) {
-      arrowZone = 'left';
-    } else if (capturedPos < 66) {
-      arrowZone = 'center';
-    } else {
-      arrowZone = 'right';
-    }
-
-    console.log('Arrow pos:', capturedPos, 'Arrow zone:', arrowZone, 'Player dove:', dir);
-
+    if (capturedPos < 33) arrowZone = 'left';
+    else if (capturedPos < 66) arrowZone = 'center';
+    else arrowZone = 'right';
     el('diveLeft')!.style.display = 'none';
     el('diveCenter')!.style.display = 'none';
     el('diveRight')!.style.display = 'none';
-
     const ai = el('ai-player');
     if (ai) ai.style.animation = 'runUp 0.4s ease forwards';
-
-    setTimeout(() => {
-      resolveAiShot(dir, arrowZone);
-    }, 400);
+    setTimeout(() => { resolveAiShot(dir, arrowZone); }, 400);
   };
 
   function resolveAiShot(playerDiveDir: 'left' | 'center' | 'right', arrowZone: 'left' | 'center' | 'right') {
-    const aiShotDir = arrowZone;
-
-    let actualShotDir = aiShotDir;
+    let actualShotDir = arrowZone;
     if (S.diff === 'hard' && Math.random() < 0.25) {
-      const others = ['left', 'center', 'right'].filter(d => d !== aiShotDir);
+      const others = ['left', 'center', 'right'].filter(d => d !== arrowZone);
       actualShotDir = others[Math.floor(Math.random() * others.length)] as 'left' | 'center' | 'right';
-      console.log('Hard mode feint! Arrow:', aiShotDir, 'Actual:', actualShotDir);
     }
-
     const net = el('net');
     const app = el('app');
     const rect = net?.getBoundingClientRect() || { width: 200, height: 172 };
-
-    let targetLocalX: number;
-    if (actualShotDir === 'left') targetLocalX = rect.width * 0.2;
-    else if (actualShotDir === 'right') targetLocalX = rect.width * 0.8;
-    else targetLocalX = rect.width * 0.5;
+    let targetLocalX = actualShotDir === 'left' ? rect.width * 0.2 : actualShotDir === 'right' ? rect.width * 0.8 : rect.width * 0.5;
     const targetLocalY = rect.height * 0.35;
-
     let tx = 0, ty = 0;
     if (net && app) {
       const netRect = net.getBoundingClientRect();
@@ -864,64 +684,42 @@ function initGame() {
       tx = (netRect.left - appRect.left) + targetLocalX - 22;
       ty = (netRect.top - appRect.top) + targetLocalY - 22;
     }
-
-    // Switch to keeper view
     el('ai-player')!.style.display = 'none';
     el('keeper')!.style.display = 'block';
-
     diveKeeper(playerDiveDir);
-
     const ball = el('ball');
     if (ball) {
       ball.style.transition = 'all 0.4s ease-in';
       ball.style.left = tx + 'px';
       ball.style.top = ty + 'px';
       ball.style.transform = 'scale(0.3) rotate(360deg)';
-
       const isSave = actualShotDir === playerDiveDir;
-
       setTimeout(() => {
-        if (isSave) {
-          S.matchStats.saves++;
-          showText('SAVED!', '#00ff88');
-        } else {
-          S.aScore++;
-          updateScoreUI();
-          triggerNetRipple();
-          showText('GOAL!', '#ff3535');
-        }
+        if (isSave) { S.matchStats.saves++; showText('SAVED!', '#00ff88'); }
+        else { S.aScore++; updateScoreUI(); triggerNetRipple(); showText('GOAL!', '#ff3535'); }
       }, C.BALL_WAIT);
-
-      setTimeout(() => {
-        checkRoundEnd();
-      }, C.BALL_WAIT + C.POST_SHOOT_WAIT);
+      setTimeout(() => { checkRoundEnd(); }, C.BALL_WAIT + C.POST_SHOOT_WAIT);
     }
   }
 
   function endGame() {
     S.gameOver = true;
     showScreen('results');
-
     const isWin = S.pScore > S.aScore;
     const isDraw = S.pScore === S.aScore;
-
     const t = el('resultTitle');
     const e = el('resultEmoji');
     const s = el('resultScore');
     const cg = el('statGoals');
     const cs = el('statSaves');
-
     if (t) t.innerText = isWin ? 'VICTORY!' : (isDraw ? 'DRAW' : 'DEFEAT');
     if (e) e.innerText = isWin ? '🏆' : (isDraw ? '🤝' : '💀');
     if (s) s.innerText = `${S.pScore} — ${S.aScore}`;
     if (cg) cg.innerText = S.matchStats.goals.toString();
     if (cs) cs.innerText = S.matchStats.saves.toString();
-
     if (isWin) spawnConfetti();
-
-    console.log('endGame called, wallet:', S.wallet, 'username:', S.username, 'isWin:', isWin)
-
-    if (S.wallet) {  // Remove S.username check!
+    console.log('endGame called, wallet:', S.wallet, 'isWin:', isWin)
+    if (S.wallet) {
       console.log('calling saveMatchResult...')
       saveMatchResult(isWin);
       cachedLeaderboardData = null;
@@ -930,22 +728,10 @@ function initGame() {
   }
 
   async function saveMatchResult(isWin: boolean) {
-    console.log('=== saveMatchResult ===')
-    console.log('wallet:', S.wallet)
-    console.log('fid:', S.fid)
-    console.log('username:', S.username)
-    console.log('isWin:', isWin)
-    console.log('goals:', S.matchStats.goals)
-    console.log('saves:', S.matchStats.saves)
-
-    if (!S.wallet) {
-      console.error('NO WALLET - cannot save')
-      return
-    }
-
+    console.log('=== saveMatchResult ===', 'wallet:', S.wallet, 'fid:', S.fid, 'username:', S.username)
+    if (!S.wallet) { console.error('NO WALLET'); return }
     try {
-      const result = await supabase.rpc(
-        'upsert_player_stats', {
+      const result = await supabase.rpc('upsert_player_stats', {
         p_wallet: S.wallet,
         p_fid: S.fid,
         p_username: S.username,
@@ -953,23 +739,19 @@ function initGame() {
         p_is_win: isWin,
         p_goals: S.matchStats.goals,
         p_saves: S.matchStats.saves
-      }
-      )
+      })
       console.log('Save result:', JSON.stringify(result))
-      if (result.error) {
-        console.error('Supabase error:', result.error)
-      } else {
-        console.log('Stats saved successfully!')
-      }
+      if (result.error) console.error('Supabase error:', result.error)
+      else console.log('Stats saved successfully!')
     } catch (e) {
       console.error('saveMatchResult exception:', e)
     }
   }
 
-  ; (window as any).onPlayAgain = () => (window as any).startGame(S.diff);
-  ; (window as any).onMainMenu = () => { showScreen('menu'); loadMenuStats(); };
+  ;(window as any).onPlayAgain = () => (window as any).startGame(S.diff);
+  ;(window as any).onMainMenu = () => { showScreen('menu'); loadMenuStats(); };
 
-  ; (window as any).forceRefreshLeaderboard = () => {
+  ;(window as any).forceRefreshLeaderboard = () => {
     cachedLeaderboardData = null;
     leaderboardCacheTime = 0;
     loadLeaderboard();
@@ -979,14 +761,10 @@ function initGame() {
     const cont = el('leaderboardContent');
     const myRank = el('myRankBar');
     if (!cont || !myRank) return;
-
     cachedLeaderboardData = null;
     leaderboardCacheTime = 0;
-
     cont.innerHTML = '<div class="spinner"></div>';
-
     try {
-      console.log('Fetching leaderboard...');
       const { data, error } = await supabase
         .from('player_profiles')
         .select('username, wallet_address, total_wins, win_rate, total_matches, leaderboard_score, avatar_url')
@@ -994,21 +772,11 @@ function initGame() {
         .order('total_wins', { ascending: false })
         .gte('total_matches', 1)
         .limit(100);
-
-      console.log('Leaderboard result:', data, 'error:', error);
-
-      if (error) {
-        console.error('Leaderboard error:', error);
-        cont.innerHTML = `<div class="error-text">Error: ${error.message}</div>`;
-        return;
-      }
-
+      if (error) { cont.innerHTML = `<div class="error-text">Error: ${error.message}</div>`; return; }
       cachedLeaderboardData = data;
       leaderboardCacheTime = Date.now();
-
       renderLeaderboard(data);
     } catch (e: any) {
-      console.error('Leaderboard exception:', e);
       cont.innerHTML = `<div class="error-text">Failed to load: ${e?.message || 'Unknown'}</div>`;
     }
   }
@@ -1017,88 +785,35 @@ function initGame() {
     const cont = el('leaderboardContent');
     const myRank = el('myRankBar');
     if (!cont || !myRank) return;
-
-    console.log('Rendering leaderboard with data:', data);
-
     if (!data || data.length === 0) {
-      cont.innerHTML = `
-        <div class="placeholder-wrap">
-          <div class="placeholder-emoji">🤷‍♂️</div>
-          <div class="placeholder-title">NO PLAYERS YET</div>
-        </div>
-      `;
+      cont.innerHTML = `<div class="placeholder-wrap"><div class="placeholder-emoji">🤷‍♂️</div><div class="placeholder-title">NO PLAYERS YET</div></div>`;
       return;
     }
-
     let html = '';
     type PlayerRow = { rank: number; username: string; win_rate: number; total_wins: number; wallet_address: string; leaderboard_score: number };
     let meFound: PlayerRow | null = null;
-
     data.forEach((p: any, i: number) => {
       const rank = i + 1;
-      const isMe = p.wallet_address === S.wallet;
-      if (isMe) {
-        meFound = { ...p, rank };
-      }
-      const row = p;
-      const index = i;
+      if (p.wallet_address === S.wallet) meFound = { ...p, rank };
       html += `
-<div style="
-  display:flex;align-items:center;
-  padding:10px 16px;gap:12px;
-  border-bottom:1px solid #222;
-  background: ${index === 0 ? '#1e2a1e' :
-          index === 1 ? '#1e1e2a' :
-            index === 2 ? '#2a1e1e' : 'transparent'};
-">
-  <div style="
-    width:28px;text-align:center;
-    font-weight:bold;color:#666;font-size:13px;
-  ">${index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}</div>
-  
-  <div style="
-    width:32px;height:32px;border-radius:50%;
-    overflow:hidden;background:#333;flex-shrink:0;
-  ">
-    ${row.avatar_url ?
-          `<img src="${row.avatar_url}" 
-        style="width:100%;height:100%;object-fit:cover"/>` :
-          `<div style="
-        width:100%;height:100%;
-        display:flex;align-items:center;
-        justify-content:center;font-size:16px
-      ">👤</div>`
-        }
+<div style="display:flex;align-items:center;padding:10px 16px;gap:12px;border-bottom:1px solid #222;background:${i === 0 ? '#1e2a1e' : i === 1 ? '#1e1e2a' : i === 2 ? '#2a1e1e' : 'transparent'};">
+  <div style="width:28px;text-align:center;font-weight:bold;color:#666;font-size:13px;">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}</div>
+  <div style="width:32px;height:32px;border-radius:50%;overflow:hidden;background:#333;flex-shrink:0;">
+    ${p.avatar_url ? `<img src="${p.avatar_url}" style="width:100%;height:100%;object-fit:cover"/>` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:16px">👤</div>`}
   </div>
-
   <div style="flex:1;min-width:0;">
-    <div style="
-      font-weight:bold;font-size:14px;
-      white-space:nowrap;overflow:hidden;
-      text-overflow:ellipsis;
-    ">${row.username ||
-        row.wallet_address.slice(0, 6) + '...' +
-        row.wallet_address.slice(-4)}</div>
-    <div style="font-size:11px;color:#888">
-      ${row.win_rate}% win rate
-    </div>
+    <div style="font-weight:bold;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.username || p.wallet_address.slice(0, 6) + '...' + p.wallet_address.slice(-4)}</div>
+    <div style="font-size:11px;color:#888">${p.win_rate}% win rate</div>
   </div>
-
-  <div style="
-    font-weight:bold;color:#00ff88;font-size:15px;
-  ">${Math.round(row.leaderboard_score)}</div>
+  <div style="font-weight:bold;color:#00ff88;font-size:15px;">${Math.round(p.leaderboard_score)}</div>
 </div>`;
     });
     cont.innerHTML = html;
-
     if (S.wallet) {
       myRank.style.display = 'flex';
       const mf = meFound as PlayerRow | null;
-      if (mf) {
-        updateMyRankBar(mf.rank, mf.username, mf.win_rate, mf.total_wins, mf.leaderboard_score);
-      } else {
-        updateMyRankBar('100+', S.username!, 0, 0, 0);
-      }
+      if (mf) updateMyRankBar(mf.rank, mf.username, mf.win_rate, mf.total_wins, mf.leaderboard_score);
+      else updateMyRankBar('100+', S.username || 'You', 0, 0, 0);
     } else {
       myRank.style.display = 'none';
     }
@@ -1137,252 +852,81 @@ function initGame() {
   function showOnboardingIfNeeded() {
     const seen = localStorage.getItem('pb_onboarding_seen')
     if (seen) return
-
     const html = `
-    <div id="onboardingOverlay" style="
-      position:fixed;inset:0;
-      background:rgba(0,0,0,0.85);
-      display:flex;align-items:center;
-      justify-content:center;
-      z-index:9999;padding:20px;
-    ">
-      <div style="
-        background:#1a1a2e;border-radius:20px;
-        padding:32px 24px;max-width:320px;
-        width:100%;text-align:center;
-        border:1px solid #333;color:white;
-        font-family:sans-serif;
-      ">
+    <div id="onboardingOverlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;">
+      <div style="background:#1a1a2e;border-radius:20px;padding:32px 24px;max-width:320px;width:100%;text-align:center;border:1px solid #333;color:white;font-family:sans-serif;">
         <div style="font-size:48px;margin-bottom:16px">⚽</div>
-        <div style="
-          font-size:22px;font-weight:bold;
-          color:#00ff88;margin-bottom:8px;
-        ">Welcome to Penalty Blitz!</div>
-        <div style="
-          font-size:14px;color:#aaa;
-          line-height:1.6;margin-bottom:24px;
-        ">
-          Compete in penalty shootouts and climb
-          the global leaderboard.<br/><br/>
+        <div style="font-size:22px;font-weight:bold;color:#00ff88;margin-bottom:8px;">Welcome to Penalty Blitz!</div>
+        <div style="font-size:14px;color:#aaa;line-height:1.6;margin-bottom:24px;">
+          Compete in penalty shootouts and climb the global leaderboard.<br/><br/>
           <b style="color:white">⚡ How to play:</b><br/>
-          🎯 <b>Shooting:</b> Aim your shot and 
-          choose power carefully<br/>
-          🧤 <b>Saving:</b> Watch the arrow and 
-          dive the right way<br/>
+          🎯 <b>Shooting:</b> Aim your shot and choose power carefully<br/>
+          🧤 <b>Saving:</b> Watch the arrow and dive the right way<br/>
           🏆 <b>Win</b> to earn points and rank up!
         </div>
-        <button onclick="
-          localStorage.setItem('pb_onboarding_seen','1');
-          document.getElementById('onboardingOverlay')
-            .remove();
-        " style="
-          background:#00ff88;color:#000;
-          border:none;border-radius:12px;
-          padding:14px 32px;font-size:16px;
-          font-weight:bold;cursor:pointer;
-          width:100%;
-        ">Let's Play! ⚽</button>
+        <button onclick="localStorage.setItem('pb_onboarding_seen','1');document.getElementById('onboardingOverlay').remove();" style="background:#00ff88;color:#000;border:none;border-radius:12px;padding:14px 32px;font-size:16px;font-weight:bold;cursor:pointer;width:100%;">Let's Play! ⚽</button>
       </div>
     </div>`
-
     document.body.insertAdjacentHTML('beforeend', html)
     localStorage.setItem('pb_onboarding_seen', '1')
   }
 
   async function showProfileScreen() {
-    // Update active tab
     const tabs = ['play', 'leaderboard', 'profile']
     tabs.forEach(t => {
       const el = document.getElementById(`tab-${t}`)
-      if (el) el.style.color =
-        t === 'profile' ? '#00ff88' : '#888'
+      if (el) el.style.color = t === 'profile' ? '#00ff88' : '#888'
     })
-
-    // Fetch latest stats from Supabase
-    const { data } = await supabase
-      .from('player_profiles')
-      .select('*')
-      .eq('wallet_address', S.wallet)
-      .maybeSingle()
-
-    // Get rank
-    const { count } = await supabase
-      .from('player_profiles')
-      .select('*', { count: 'exact', head: true })
-      .gt('leaderboard_score', data?.leaderboard_score || 0)
-
+    const { data } = await supabase.from('player_profiles').select('*').eq('wallet_address', S.wallet).maybeSingle()
+    const { count } = await supabase.from('player_profiles').select('*', { count: 'exact', head: true }).gt('leaderboard_score', data?.leaderboard_score || 0)
     const rank = (count || 0) + 1
-
-    console.log('Score:', data?.leaderboard_score)
-    console.log('Players above me:', count)
-    console.log('My rank:', rank)
-
     const profileHTML = `
-    <div id="screen-profile" style="
-      position:fixed;inset:0;
-      background:linear-gradient(135deg,#0d0d1a 0%,#1a1a2e 100%);
-      display:flex;flex-direction:column;
-      align-items:center;
-      padding:40px 20px 80px;
-      overflow-y:auto;
-      color:white;
-      font-family:sans-serif;
-    ">
-      <!-- Avatar -->
-      <div style="
-        width:80px;
-        height:80px;
-        border-radius:50%;
-        overflow:hidden;
-        border:3px solid #00ff88;
-        background:#333;
-        flex-shrink:0;
-        margin-bottom:12px;
-      ">
-        ${S.avatarUrl ?
-        `<img src="${S.avatarUrl}" 
-            style="
-              width:100%;
-              height:100%;
-              object-fit:cover;
-              object-position:center;
-              border-radius:50%;
-              display:block;
-            "/>` :
-        `<div style="width:100%;height:100%;
-            display:flex;align-items:center;
-            justify-content:center;font-size:32px">👤</div>`
-      }
+    <div id="screen-profile" style="position:fixed;inset:0;background:linear-gradient(135deg,#0d0d1a 0%,#1a1a2e 100%);display:flex;flex-direction:column;align-items:center;padding:40px 20px 80px;overflow-y:auto;color:white;font-family:sans-serif;">
+      <div style="width:80px;height:80px;border-radius:50%;overflow:hidden;border:3px solid #00ff88;background:#333;flex-shrink:0;margin-bottom:12px;">
+        ${S.avatarUrl ? `<img src="${S.avatarUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;"/>` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:32px">👤</div>`}
       </div>
-
-      <!-- Username -->
-      <div style="
-        font-size:20px;font-weight:bold;
-        color:#00ff88;margin-bottom:4px;
-      ">
-        ${data?.username || 'Anonymous'}
-      </div>
-
-      <!-- Wallet address -->
-      <div style="
-        font-size:12px;color:#666;
-        margin-bottom:24px;
-      ">
-        ${S.wallet ?
-        S.wallet.slice(0, 6) + '...' + S.wallet.slice(-4) : ''}
-      </div>
-
-      <!-- Rank badge -->
-      <div style="
-        background:#1e1e3a;border:1px solid #00ff88;
-        border-radius:12px;padding:8px 24px;
-        font-size:14px;color:#00ff88;
-        margin-bottom:24px;
-      ">
-        🏆 Rank #${rank}
-      </div>
-
-      <!-- Stats grid -->
-      <div style="
-        width:100%;max-width:320px;
-        display:grid;grid-template-columns:1fr 1fr;
-        gap:12px;
-      ">
-        ${[
-        ['Matches', data?.total_matches || 0, '🎮'],
-        ['Wins', data?.total_wins || 0, '✅'],
-        ['Losses', data?.total_losses || 0, '❌'],
-        ['Win Rate', (data?.win_rate || 0) + '%', '📊'],
-        ['Goals', data?.total_goals_scored || 0, '⚽'],
-        ['Score', data?.leaderboard_score || 0, '⭐'],
-      ].map(([label, value, icon]) => `
-          <div style="
-            background:#1e1e3a;border-radius:12px;
-            padding:16px;text-align:center;
-            border:1px solid #333;
-          ">
+      <div style="font-size:20px;font-weight:bold;color:#00ff88;margin-bottom:4px;">${data?.username || 'Anonymous'}</div>
+      <div style="font-size:12px;color:#666;margin-bottom:24px;">${S.wallet ? S.wallet.slice(0, 6) + '...' + S.wallet.slice(-4) : ''}</div>
+      <div style="background:#1e1e3a;border:1px solid #00ff88;border-radius:12px;padding:8px 24px;font-size:14px;color:#00ff88;margin-bottom:24px;">🏆 Rank #${rank}</div>
+      <div style="width:100%;max-width:320px;display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        ${[['Matches', data?.total_matches || 0, '🎮'],['Wins', data?.total_wins || 0, '✅'],['Losses', data?.total_losses || 0, '❌'],['Win Rate', (data?.win_rate || 0) + '%', '📊'],['Goals', data?.total_goals_scored || 0, '⚽'],['Score', data?.leaderboard_score || 0, '⭐']].map(([label, value, icon]) => `
+          <div style="background:#1e1e3a;border-radius:12px;padding:16px;text-align:center;border:1px solid #333;">
             <div style="font-size:20px">${icon}</div>
-            <div style="
-              font-size:22px;font-weight:bold;
-              color:#00ff88;margin:4px 0;
-            ">${value}</div>
+            <div style="font-size:22px;font-weight:bold;color:#00ff88;margin:4px 0;">${value}</div>
             <div style="font-size:11px;color:#888">${label}</div>
-          </div>
-        `).join('')}
+          </div>`).join('')}
       </div>
     </div>`
-
-    // Remove existing profile screen if any
     const existing = document.getElementById('screen-profile')
     if (existing) existing.remove()
-
     document.body.insertAdjacentHTML('beforeend', profileHTML)
   }
 
-  ; (window as any).switchTab = (tab: string) => {
-    const existingProfile =
-      document.getElementById('screen-profile')
+  ;(window as any).switchTab = (tab: string) => {
+    const existingProfile = document.getElementById('screen-profile')
     if (existingProfile) existingProfile.remove()
-
-    // Update active tab styling
     const tabs = ['play', 'leaderboard', 'profile']
     tabs.forEach(t => {
       const el = document.getElementById(`tab-${t}`)
       if (el) el.style.color = t === tab ? '#00ff88' : '#888'
     })
-
     if (tab === 'play') showScreen('menu')
     if (tab === 'leaderboard') showScreen('leaderboard')
     if (tab === 'profile') showProfileScreen()
   }
 
   const bottomNav = `
-  <div id="bottomNav" style="
-    position:fixed;
-    bottom:0;
-    left:0;
-    right:0;
-    height:64px;
-    background:#1a1a2e;
-    border-top:1px solid #333;
-    display:flex;
-    align-items:center;
-    justify-content:space-around;
-    z-index:1000;
-    display:none;
-  ">
-    <button onclick="switchTab('play')" id="tab-play" style="
-      flex:1;height:64px;background:none;border:none;
-      color:#888;font-size:11px;cursor:pointer;
-      display:flex;flex-direction:column;
-      align-items:center;justify-content:center;gap:4px;
-      min-width:44px;
-    ">
-      <span style="font-size:20px">⚽</span>
-      <span>Play</span>
+  <div id="bottomNav" style="position:fixed;bottom:0;left:0;right:0;height:64px;background:#1a1a2e;border-top:1px solid #333;display:flex;align-items:center;justify-content:space-around;z-index:1000;display:none;">
+    <button onclick="switchTab('play')" id="tab-play" style="flex:1;height:64px;background:none;border:none;color:#888;font-size:11px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:44px;">
+      <span style="font-size:20px">⚽</span><span>Play</span>
     </button>
-    <button onclick="switchTab('leaderboard')" id="tab-leaderboard" style="
-      flex:1;height:64px;background:none;border:none;
-      color:#888;font-size:11px;cursor:pointer;
-      display:flex;flex-direction:column;
-      align-items:center;justify-content:center;gap:4px;
-      min-width:44px;
-    ">
-      <span style="font-size:20px">🏆</span>
-      <span>Leaderboard</span>
+    <button onclick="switchTab('leaderboard')" id="tab-leaderboard" style="flex:1;height:64px;background:none;border:none;color:#888;font-size:11px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:44px;">
+      <span style="font-size:20px">🏆</span><span>Leaderboard</span>
     </button>
-    <button onclick="switchTab('profile')" id="tab-profile" style="
-      flex:1;height:64px;background:none;border:none;
-      color:#888;font-size:11px;cursor:pointer;
-      display:flex;flex-direction:column;
-      align-items:center;justify-content:center;gap:4px;
-      min-width:44px;
-    ">
-      <span style="font-size:20px">👤</span>
-      <span>Profile</span>
+    <button onclick="switchTab('profile')" id="tab-profile" style="flex:1;height:64px;background:none;border:none;color:#888;font-size:11px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:44px;">
+      <span style="font-size:20px">👤</span><span>Profile</span>
     </button>
   </div>`
 
   document.body.insertAdjacentHTML('beforeend', bottomNav)
-
 }
