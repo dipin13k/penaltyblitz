@@ -97,9 +97,29 @@ function initGame() {
 
   setTimeout(() => {
     const loading = document.getElementById('screen-loading')
-    if (loading) {
-      loading.remove()
-      if (!S.wallet) showScreen('connect')
+    if (loading && !S.wallet) {
+      // Check if we are inside a mini app context
+      sdk.context.then((ctx: any) => {
+        if (ctx?.user) {
+          // We are inside Farcaster/Base App
+          // Keep loading and wait longer
+          console.log('Inside mini app, waiting longer...')
+          setTimeout(() => {
+            const l = document.getElementById('screen-loading')
+            if (l && !S.wallet) {
+              l.remove()
+              showScreen('connect')
+            }
+          }, 10000)
+        } else {
+          // Not inside mini app — show message
+          loading.remove()
+          showScreen('connect')
+        }
+      }).catch(() => {
+        loading.remove()
+        showScreen('connect')
+      })
     }
   }, 5000)
 
