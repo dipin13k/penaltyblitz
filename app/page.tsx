@@ -22,20 +22,11 @@ export default function GamePage() {
   }, [setFrameReady]);
 
   useEffect(() => {
-    console.log('=== wallet useEffect fired ===',
-      'isConnected:', isConnected,
-      'address:', address)
-
-    const timer = setTimeout(() => {
-      const addr = isConnected ? (address ?? null) : null
-      console.log('Calling __onWalletStateChange with:', addr)
-      if ((window as any).__onWalletStateChange) {
-        (window as any).__onWalletStateChange(addr)
-      } else {
-        (window as any).__pendingWalletAddr = addr
-      }
-    }, 500)
-    return () => clearTimeout(timer)
+    if (!isConnected && !address) return;
+    console.log('Wallet ready, calling initGame...')
+    setTimeout(() => {
+      initGame()
+    }, 300)
   }, [isConnected, address])
 
   // Single useEffect for initialization - call initGame directly after SDK loads
@@ -1108,7 +1099,7 @@ function initGame() {
     });
     cont.innerHTML = html;
 
-    if (S.wallet && S.username) {
+    if (S.wallet) {
       myRank.style.display = 'flex';
       const mf = meFound as PlayerRow | null;
       if (mf) {

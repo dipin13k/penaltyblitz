@@ -26,8 +26,6 @@ export function getGameHTML() {
         font-size:14px;color:#aaa;
         line-height:1.6;max-width:280px;
       ">
-        Open this app inside Base App or Warpcast
-        to play automatically.
       </div>
     </div>
   </div>
