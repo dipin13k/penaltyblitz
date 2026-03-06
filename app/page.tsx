@@ -1279,6 +1279,10 @@ function initGame() {
 
     const rank = (count || 0) + 1
 
+    console.log('Score:', data?.leaderboard_score)
+    console.log('Players above me:', count)
+    console.log('My rank:', rank)
+
     const profileHTML = `
     <div id="screen-profile" style="
       position:fixed;inset:0;
