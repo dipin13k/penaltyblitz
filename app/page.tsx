@@ -22,15 +22,6 @@ export default function GamePage() {
   }, [setFrameReady]);
 
   useEffect(() => {
-    if (!isConnected && !address) return;
-    console.log('Wallet ready, calling initGame...')
-    setTimeout(() => {
-      initGame()
-    }, 300)
-  }, [isConnected, address])
-
-  // Single useEffect for initialization - call initGame directly after SDK loads
-  useEffect(() => {
     if (!containerRef.current || document.getElementById('game-injected')) return;
 
     const style = document.createElement('style');
@@ -50,7 +41,8 @@ export default function GamePage() {
       } catch (e) {
         console.log('SDK context failed:', e)
       }
-      initGame()  // Call directly here, always
+      console.log('Calling initGame directly...')
+      initGame()
     }
     load()
   }, []);
