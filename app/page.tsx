@@ -4,6 +4,7 @@ import { useAccount } from 'wagmi';
 import { createClient } from '@supabase/supabase-js';
 import { useMiniKit } from '@coinbase/onchainkit/minikit';
 import { sdk } from '@farcaster/miniapp-sdk';
+import { useMiniApp } from '@neynar/react';
 import { getGameHTML } from './getGameHTML';
 import { getGameCSS } from './getGameCSS';
 
@@ -12,6 +13,7 @@ export default function GamePage() {
   const { address, isConnected } = useAccount();
   const [_isReady, setIsReady] = useState(false);
   const { setFrameReady } = useMiniKit();
+  const { context } = useMiniApp();
 
   useEffect(() => {
     setIsReady(true);
@@ -48,8 +50,11 @@ export default function GamePage() {
 
     containerRef.current.innerHTML = getGameHTML();
 
+    // Pass miniapp context to window for initGame to use
+    ; (window as any).__miniAppContext = context
+
     initGame();
-  }, []);
+  }, [context]);
 
   return (
     <div ref={containerRef} style={{
@@ -263,18 +268,35 @@ function initGame() {
     username: string | null
     avatarUrl: string | null
   }> {
+    // First try useMiniApp context (works on both
+    // Base App and Warpcast)
+    const ctx = (window as any).__miniAppContext
+    if (ctx?.user) {
+      console.log('Got identity from useMiniApp:',
+        ctx.user.username)
+      return {
+        fid: ctx.user.fid || null,
+        username: ctx.user.username || null,
+        avatarUrl: ctx.user.pfpUrl || null
+      }
+    }
+
+    // Fallback to sdk.context
     try {
-      const context = await sdk.context
-      if (context?.user) {
+      const sdkCtx = await sdk.context
+      if (sdkCtx?.user) {
+        console.log('Got identity from sdk.context:',
+          sdkCtx.user.username)
         return {
-          fid: context.user.fid || null,
-          username: context.user.username || null,
-          avatarUrl: context.user.pfpUrl || null
+          fid: sdkCtx.user.fid || null,
+          username: sdkCtx.user.username || null,
+          avatarUrl: sdkCtx.user.pfpUrl || null
         }
       }
     } catch (e) {
-      console.log('Not in Farcaster context:', e)
+      console.log('sdk.context failed:', e)
     }
+
     return { fid: null, username: null, avatarUrl: null }
   }
 
