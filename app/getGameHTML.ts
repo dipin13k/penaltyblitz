@@ -8,7 +8,7 @@ export function getGameHTML() {
   First screen. Cannot be skipped.
   ════════════════════════════════
   -->
-  <div id="screen-connect" class="screen active">
+  <div id="screen-connect" class="screen">
     <div style="
       position:fixed;inset:0;
       background:#0d0d1a;
