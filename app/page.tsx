@@ -148,7 +148,8 @@ function initGame() {
     if (ep) ep.remove()
     clearAllIntervals();
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    if (id !== 'connect') el(`screen-${id}`)?.classList.add('active');
+    // FIX: always activate the target screen (was incorrectly skipping 'connect')
+    el(`screen-${id}`)?.classList.add('active');
     if (id === 'leaderboard') (window as any).forceRefreshLeaderboard();
     const nav = document.getElementById('bottomNav');
     if (nav) nav.style.display = ['menu','leaderboard','profile'].includes(id) ? 'flex' : 'none';
@@ -170,9 +171,6 @@ function initGame() {
   }
 
   ;(window as any).__onWalletStateChange = async (address: string | null) => {
-    const loadingEl = document.getElementById('screen-loading')
-    if (loadingEl) loadingEl.remove()
-
     S.wallet = address
     if (!address) { showScreen('connect'); return }
 
@@ -654,7 +652,6 @@ function initGame() {
       return;
     }
 
-    // Use a plain object to avoid TypeScript narrowing issues with forEach closures
     let meFound: PlayerRow | null = null;
     let html='';
 
