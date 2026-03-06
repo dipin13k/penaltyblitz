@@ -16,12 +16,10 @@ export default function GamePage() {
   useEffect(() => { setIsReady(true); }, []);
   useEffect(() => { setFrameReady(); }, [setFrameReady]);
 
-  // Watch wallet state and notify game
   useEffect(() => {
     console.log('=== wallet useEffect fired ===', 'isConnected:', isConnected, 'address:', address)
     const timer = setTimeout(() => {
       const addr = isConnected ? (address ?? null) : null
-      console.log('Calling __onWalletStateChange with:', addr)
       if ((window as any).__onWalletStateChange) {
         (window as any).__onWalletStateChange(addr)
       } else {
@@ -31,7 +29,6 @@ export default function GamePage() {
     return () => clearTimeout(timer)
   }, [isConnected, address])
 
-  // Init game once on mount
   useEffect(() => {
     if (!containerRef.current || document.getElementById('game-injected')) return;
     const style = document.createElement('style');
@@ -61,6 +58,15 @@ export default function GamePage() {
   );
 }
 
+interface PlayerRow {
+  rank: number;
+  username: string;
+  win_rate: number;
+  total_wins: number;
+  wallet_address: string;
+  leaderboard_score: number;
+}
+
 function initGame() {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -86,7 +92,7 @@ function initGame() {
   }
 
   let activeIntervals: number[] = [];
-  function safeSetInterval(fn: Function, ms: number) {
+  function safeSetInterval(fn: () => void, ms: number) {
     const id = window.setInterval(fn, ms);
     activeIntervals.push(id);
     return id;
@@ -97,8 +103,8 @@ function initGame() {
   }
 
   const C = {
-    BALL_WAIT: 400, POST_SHOOT_WAIT: 800, AI_THINK: 1200,
-    END_RND_WAIT: 1500, SUDDEN_DEATH_DUR: 2500, FPS: 60, KEEPER_Y: 28,
+    BALL_WAIT: 400, POST_SHOOT_WAIT: 800,
+    END_RND_WAIT: 1500, SUDDEN_DEATH_DUR: 2500, FPS: 60,
   };
 
   const DIFF = {
@@ -108,8 +114,8 @@ function initGame() {
   };
 
   const S = {
-    wallet: null as string | null,        // currently connected wallet (may be slot 2)
-    primaryWallet: null as string | null, // wallet_address column value in DB (always slot 1)
+    wallet: null as string | null,
+    primaryWallet: null as string | null,
     fid: null as number | null,
     username: null as string | null,
     avatarUrl: null as string | null,
@@ -170,7 +176,6 @@ function initGame() {
     S.wallet = address
     if (!address) { showScreen('connect'); return }
 
-    // Get identity
     const identity = await getFarcasterIdentity()
     S.fid = identity.fid
     S.username = identity.username
@@ -185,7 +190,6 @@ function initGame() {
 
     console.log('Identity resolved — fid:', S.fid, 'username:', S.username, 'wallet:', address)
 
-    // Look up player record
     let existingPlayer: any = null
     if (S.fid) {
       const { data } = await supabase.from('player_profiles').select('*').eq('fid', S.fid).maybeSingle()
@@ -201,19 +205,14 @@ function initGame() {
     }
 
     if (existingPlayer) {
-      // *** KEY FIX: always remember the DB's primary wallet_address slot ***
       S.primaryWallet = existingPlayer.wallet_address
-
-      // Sync back identity from DB if missing
       if (!S.username && existingPlayer.username) S.username = existingPlayer.username
       if (!S.avatarUrl && existingPlayer.avatar_url) S.avatarUrl = existingPlayer.avatar_url
-
       const updateData: any = {
         fid: S.fid || existingPlayer.fid,
         username: S.username || existingPlayer.username,
         avatar_url: S.avatarUrl || existingPlayer.avatar_url,
       }
-      // Add wallet to empty slot if not already stored
       if (existingPlayer.wallet_address !== address && existingPlayer.wallet_address_2 !== address) {
         if (!existingPlayer.wallet_address) updateData.wallet_address = address
         else if (!existingPlayer.wallet_address_2) updateData.wallet_address_2 = address
@@ -222,7 +221,6 @@ function initGame() {
       showScreen('menu')
       loadMenuStats()
     } else {
-      // New player — connected wallet becomes primary
       S.primaryWallet = address
       const { error } = await supabase.from('player_profiles').insert({
         wallet_address: address,
@@ -233,8 +231,7 @@ function initGame() {
       if (!error) { showScreen('menu'); loadMenuStats() }
       else console.error('Insert error:', error)
     }
-
-    console.log('primaryWallet set to:', S.primaryWallet)
+    console.log('primaryWallet:', S.primaryWallet)
   }
 
   const pending = (window as any).__pendingWalletAddr
@@ -256,17 +253,17 @@ function initGame() {
       let data: any = null;
       if (S.fid) {
         const { data: d } = await supabase.from('player_profiles')
-          .select('total_matches, total_wins, win_rate').eq('fid', S.fid).maybeSingle();
+          .select('total_matches,total_wins,win_rate').eq('fid', S.fid).maybeSingle();
         data = d;
       }
       if (!data) {
         const { data: d } = await supabase.from('player_profiles')
-          .select('total_matches, total_wins, win_rate').eq('wallet_address', S.wallet).maybeSingle();
+          .select('total_matches,total_wins,win_rate').eq('wallet_address', S.wallet).maybeSingle();
         data = d;
       }
       if (!data) {
         const { data: d } = await supabase.from('player_profiles')
-          .select('total_matches, total_wins, win_rate').eq('wallet_address_2', S.wallet).maybeSingle();
+          .select('total_matches,total_wins,win_rate').eq('wallet_address_2', S.wallet).maybeSingle();
         data = d;
       }
       if (!data) throw new Error();
@@ -295,16 +292,14 @@ function initGame() {
   };
 
   function updateScoreUI() {
-    const pEl = el('playerScoreEl');
-    const aEl = el('aiScoreEl');
+    const pEl = el('playerScoreEl'); const aEl = el('aiScoreEl');
     if (pEl) pEl.innerText = S.pScore.toString();
     if (aEl) aEl.innerText = S.aScore.toString();
   }
 
   function playCountdown() {
     S.busy = true;
-    const ov = el('countdownOverlay');
-    const num = el('countNum');
+    const ov = el('countdownOverlay'); const num = el('countNum');
     if (!ov || !num) return;
     ov.style.display = 'flex';
     let count = 3;
@@ -329,7 +324,7 @@ function initGame() {
     }, 800);
   }
 
-  function showRoundPopup(rNum: number, cb: Function) {
+  function showRoundPopup(rNum: number, cb: () => void) {
     const p = el('roundPopup'); const rt = el('roundText'); const rs = el('roundSub');
     if (!p || !rt || !rs) return;
     rt.innerText = `ROUND ${rNum}`; rs.innerText = S.isSuddenDeath ? 'Sudden Death' : 'of 5';
@@ -415,10 +410,10 @@ function initGame() {
     const r = 26; const fuzz = 4;
     S.aimX += baseSpeed * 1.5 * S.aimDirX;
     S.aimY += baseSpeed * S.aimDirY;
-    if (S.aimX < r-fuzz)             { S.aimX = r-fuzz;             S.aimDirX *= -1; }
-    if (S.aimX > rect.width-(r-fuzz)){ S.aimX = rect.width-(r-fuzz); S.aimDirX *= -1; }
-    if (S.aimY < r-fuzz)             { S.aimY = r-fuzz;             S.aimDirY *= -1; }
-    if (S.aimY > rect.height-(r-fuzz)){ S.aimY = rect.height-(r-fuzz); S.aimDirY *= -1; }
+    if (S.aimX < r-fuzz)              { S.aimX = r-fuzz;              S.aimDirX *= -1; }
+    if (S.aimX > rect.width-(r-fuzz)) { S.aimX = rect.width-(r-fuzz); S.aimDirX *= -1; }
+    if (S.aimY < r-fuzz)              { S.aimY = r-fuzz;              S.aimDirY *= -1; }
+    if (S.aimY > rect.height-(r-fuzz)){ S.aimY = rect.height-(r-fuzz);S.aimDirY *= -1; }
     cursor.style.left = `${S.aimX}px`; cursor.style.top = `${S.aimY}px`;
   }
 
@@ -506,7 +501,7 @@ function initGame() {
     setTimeout(() => { if (o) o.style.display='none'; S.round++; beginPlayerTurn(); }, C.SUDDEN_DEATH_DUR);
   }
 
-  function showBetweenRounds(txt: string, cb: Function) {
+  function showBetweenRounds(txt: string, cb: () => void) {
     const s = el('betweenStrip'); const t = el('betweenText');
     if (!s||!t) return;
     t.innerText = txt; s.style.display='flex';
@@ -602,10 +597,8 @@ function initGame() {
     if (cg) cg.innerText=S.matchStats.goals.toString();
     if (cs) cs.innerText=S.matchStats.saves.toString();
     if (isWin) spawnConfetti();
-
-    // *** KEY FIX: use primaryWallet (slot 1 in DB) not S.wallet (may be slot 2) ***
     const walletForSave = S.primaryWallet || S.wallet
-    console.log('endGame — connected:', S.wallet, 'primaryWallet:', S.primaryWallet, 'using:', walletForSave)
+    console.log('endGame — connected:', S.wallet, 'primaryWallet:', S.primaryWallet, 'saving with:', walletForSave)
     if (walletForSave) {
       saveMatchResult(isWin, walletForSave);
       cachedLeaderboardData=null; leaderboardCacheTime=0;
@@ -613,12 +606,10 @@ function initGame() {
   }
 
   async function saveMatchResult(isWin: boolean, walletForSave: string) {
-    console.log('=== saveMatchResult ===')
-    console.log('walletForSave (primaryWallet):', walletForSave)
-    console.log('fid:', S.fid, 'username:', S.username, 'isWin:', isWin)
+    console.log('saveMatchResult — wallet:', walletForSave, 'fid:', S.fid, 'win:', isWin)
     try {
       const result = await supabase.rpc('upsert_player_stats', {
-        p_wallet:     walletForSave,   // always wallet_address slot
+        p_wallet:     walletForSave,
         p_fid:        S.fid,
         p_username:   S.username,
         p_avatar_url: S.avatarUrl,
@@ -626,9 +617,8 @@ function initGame() {
         p_goals:      S.matchStats.goals,
         p_saves:      S.matchStats.saves
       })
-      console.log('Save result:', JSON.stringify(result))
       if (result.error) console.error('Supabase error:', result.error)
-      else console.log('Stats saved successfully!')
+      else console.log('Stats saved!')
     } catch (e) { console.error('saveMatchResult exception:', e) }
   }
 
@@ -656,23 +646,27 @@ function initGame() {
     } catch (e:any) { cont.innerHTML=`<div class="error-text">Failed: ${e?.message||'Unknown'}</div>`; }
   }
 
-  function renderLeaderboard(data: any) {
+  function renderLeaderboard(data: any[]) {
     const cont=el('leaderboardContent'); const myRank=el('myRankBar');
     if (!cont||!myRank) return;
     if (!data||data.length===0) {
       cont.innerHTML=`<div class="placeholder-wrap"><div class="placeholder-emoji">🤷‍♂️</div><div class="placeholder-title">NO PLAYERS YET</div></div>`;
       return;
     }
-    type PR={rank:number;username:string;win_rate:number;total_wins:number;wallet_address:string;leaderboard_score:number};
-    let meFound:PR|null=null;
+
+    // Use a plain object to avoid TypeScript narrowing issues with forEach closures
+    let meFound: PlayerRow | null = null;
     let html='';
-    data.forEach((p:any,i:number)=>{
-      const rank=i+1;
-      // match by primaryWallet OR connected wallet
-      if (p.wallet_address===S.primaryWallet||p.wallet_address===S.wallet) meFound={...p,rank};
+
+    for (let i = 0; i < data.length; i++) {
+      const p = data[i];
+      const rank = i + 1;
+      if (p.wallet_address === S.primaryWallet || p.wallet_address === S.wallet) {
+        meFound = { rank, username: p.username, win_rate: p.win_rate, total_wins: p.total_wins, wallet_address: p.wallet_address, leaderboard_score: p.leaderboard_score };
+      }
       html+=`
 <div style="display:flex;align-items:center;padding:10px 16px;gap:12px;border-bottom:1px solid #222;background:${i===0?'#1e2a1e':i===1?'#1e1e2a':i===2?'#2a1e1e':'transparent'};">
-  <div style="width:28px;text-align:center;font-weight:bold;color:#666;font-size:13px;">${i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}</div>
+  <div style="width:28px;text-align:center;font-weight:bold;color:#666;font-size:13px;">${i===0?'🥇':i===1?'🥈':i===2?'🥉':rank}</div>
   <div style="width:32px;height:32px;border-radius:50%;overflow:hidden;background:#333;flex-shrink:0;">
     ${p.avatar_url?`<img src="${p.avatar_url}" style="width:100%;height:100%;object-fit:cover"/>`:`<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:16px">👤</div>`}
   </div>
@@ -682,16 +676,23 @@ function initGame() {
   </div>
   <div style="font-weight:bold;color:#00ff88;font-size:15px;">${Math.round(p.leaderboard_score)}</div>
 </div>`;
-    });
+    }
+
     cont.innerHTML=html;
     if (S.wallet) {
       myRank.style.display='flex';
-      if (meFound) updateMyRankBar(meFound.rank,meFound.username,meFound.win_rate,meFound.total_wins,meFound.leaderboard_score);
-      else updateMyRankBar('100+',S.username||'You',0,0,0);
-    } else myRank.style.display='none';
+      if (meFound !== null) {
+        const mf = meFound;
+        updateMyRankBar(mf.rank, mf.username, mf.win_rate, mf.total_wins, mf.leaderboard_score);
+      } else {
+        updateMyRankBar('100+', S.username||'You', 0, 0, 0);
+      }
+    } else {
+      myRank.style.display='none';
+    }
   }
 
-  function updateMyRankBar(rank:string|number,name:string,wr:number,wins:number,score:number) {
+  function updateMyRankBar(rank:string|number, name:string, wr:number, wins:number, score:number) {
     const rb=el('myRankBar'); if (!rb) return;
     rb.innerHTML=`
       <div class="lb-rank"><span class="lb-rank-num" style="color:#00d4ff">${rank}</span></div>
@@ -756,9 +757,9 @@ function initGame() {
       <div style="font-size:12px;color:#666;margin-bottom:24px;">${S.wallet?S.wallet.slice(0,6)+'...'+S.wallet.slice(-4):''}</div>
       <div style="background:#1e1e3a;border:1px solid #00ff88;border-radius:12px;padding:8px 24px;font-size:14px;color:#00ff88;margin-bottom:24px;">🏆 Rank #${rank}</div>
       <div style="width:100%;max-width:320px;display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        ${[['Matches',data?.total_matches||0,'🎮'],['Wins',data?.total_wins||0,'✅'],['Losses',data?.total_losses||0,'❌'],['Win Rate',(data?.win_rate||0)+'%','📊'],['Goals',data?.total_goals_scored||0,'⚽'],['Score',data?.leaderboard_score||0,'⭐']].map(([l,v,i])=>`
+        ${([['Matches',data?.total_matches||0,'🎮'],['Wins',data?.total_wins||0,'✅'],['Losses',data?.total_losses||0,'❌'],['Win Rate',(data?.win_rate||0)+'%','📊'],['Goals',data?.total_goals_scored||0,'⚽'],['Score',data?.leaderboard_score||0,'⭐']] as [string,string|number,string][]).map(([l,v,ic])=>`
           <div style="background:#1e1e3a;border-radius:12px;padding:16px;text-align:center;border:1px solid #333;">
-            <div style="font-size:20px">${i}</div>
+            <div style="font-size:20px">${ic}</div>
             <div style="font-size:22px;font-weight:bold;color:#00ff88;margin:4px 0;">${v}</div>
             <div style="font-size:11px;color:#888">${l}</div>
           </div>`).join('')}
