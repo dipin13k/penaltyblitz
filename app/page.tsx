@@ -168,6 +168,13 @@ function initGame() {
 
   function el(id: string) { return document.getElementById(id); }
 
+  function updateTopbar() {
+    const topbarUsername = document.getElementById('topbarUsername')
+    const topbarAddress = document.getElementById('topbarAddress')
+    if (topbarUsername) topbarUsername.innerText = S.username || (S.wallet ? S.wallet.slice(0,6) + '...' + S.wallet.slice(-4) : '')
+    if (topbarAddress && S.wallet) topbarAddress.innerText = S.wallet.slice(0,6) + '...' + S.wallet.slice(-4)
+  }
+
   function showScreen(id: string) {
     const existingProfile = document.getElementById('screen-profile')
     if (existingProfile) existingProfile.remove()
@@ -190,6 +197,7 @@ function initGame() {
       nav.style.display = showNavScreens.includes(id) ? 'flex' : 'none';
     }
     if (id === 'menu' && S.wallet) {
+      updateTopbar();
       setTimeout(() => showOnboardingIfNeeded(), 300);
     }
   }
@@ -261,6 +269,10 @@ function initGame() {
     }
 
     if (existingPlayer) {
+      // Sync back username from DB if we don't have one
+      if (!S.username && existingPlayer.username) S.username = existingPlayer.username
+      if (!S.avatarUrl && existingPlayer.avatar_url) S.avatarUrl = existingPlayer.avatar_url
+
       const updateData: any = {
         fid: S.fid || existingPlayer.fid,
         username: S.username || existingPlayer.username,
@@ -307,11 +319,32 @@ function initGame() {
       row.innerHTML = '<div class="spinner" style="border-width:2px;width:24px;height:24px;margin:10px auto"></div>';
     }
     try {
-      const { data } = await supabase
-        .from('player_profiles')
-        .select('total_matches, total_wins, win_rate')
-        .eq('wallet_address', S.wallet)
-        .maybeSingle();
+      // Try FID first, then wallet_address, then wallet_address_2
+      let data = null;
+      if (S.fid) {
+        const { data: d } = await supabase
+          .from('player_profiles')
+          .select('total_matches, total_wins, win_rate')
+          .eq('fid', S.fid)
+          .maybeSingle();
+        data = d;
+      }
+      if (!data) {
+        const { data: d } = await supabase
+          .from('player_profiles')
+          .select('total_matches, total_wins, win_rate')
+          .eq('wallet_address', S.wallet)
+          .maybeSingle();
+        data = d;
+      }
+      if (!data) {
+        const { data: d } = await supabase
+          .from('player_profiles')
+          .select('total_matches, total_wins, win_rate')
+          .eq('wallet_address_2', S.wallet)
+          .maybeSingle();
+        data = d;
+      }
       if (!data) throw new Error();
       if (row) {
         row.innerHTML = `
@@ -675,7 +708,7 @@ function initGame() {
     const net = el('net');
     const app = el('app');
     const rect = net?.getBoundingClientRect() || { width: 200, height: 172 };
-    let targetLocalX = actualShotDir === 'left' ? rect.width * 0.2 : actualShotDir === 'right' ? rect.width * 0.8 : rect.width * 0.5;
+    const targetLocalX = actualShotDir === 'left' ? rect.width * 0.2 : actualShotDir === 'right' ? rect.width * 0.8 : rect.width * 0.5;
     const targetLocalY = rect.height * 0.35;
     let tx = 0, ty = 0;
     if (net && app) {
@@ -877,7 +910,20 @@ function initGame() {
       const el = document.getElementById(`tab-${t}`)
       if (el) el.style.color = t === 'profile' ? '#00ff88' : '#888'
     })
-    const { data } = await supabase.from('player_profiles').select('*').eq('wallet_address', S.wallet).maybeSingle()
+    // Try FID first, then wallet for profile data
+    let data = null;
+    if (S.fid) {
+      const { data: d } = await supabase.from('player_profiles').select('*').eq('fid', S.fid).maybeSingle()
+      data = d;
+    }
+    if (!data) {
+      const { data: d } = await supabase.from('player_profiles').select('*').eq('wallet_address', S.wallet).maybeSingle()
+      data = d;
+    }
+    if (!data) {
+      const { data: d } = await supabase.from('player_profiles').select('*').eq('wallet_address_2', S.wallet).maybeSingle()
+      data = d;
+    }
     const { count } = await supabase.from('player_profiles').select('*', { count: 'exact', head: true }).gt('leaderboard_score', data?.leaderboard_score || 0)
     const rank = (count || 0) + 1
     const profileHTML = `
@@ -885,7 +931,7 @@ function initGame() {
       <div style="width:80px;height:80px;border-radius:50%;overflow:hidden;border:3px solid #00ff88;background:#333;flex-shrink:0;margin-bottom:12px;">
         ${S.avatarUrl ? `<img src="${S.avatarUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;"/>` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:32px">👤</div>`}
       </div>
-      <div style="font-size:20px;font-weight:bold;color:#00ff88;margin-bottom:4px;">${data?.username || 'Anonymous'}</div>
+      <div style="font-size:20px;font-weight:bold;color:#00ff88;margin-bottom:4px;">${data?.username || S.username || 'Anonymous'}</div>
       <div style="font-size:12px;color:#666;margin-bottom:24px;">${S.wallet ? S.wallet.slice(0, 6) + '...' + S.wallet.slice(-4) : ''}</div>
       <div style="background:#1e1e3a;border:1px solid #00ff88;border-radius:12px;padding:8px 24px;font-size:14px;color:#00ff88;margin-bottom:24px;">🏆 Rank #${rank}</div>
       <div style="width:100%;max-width:320px;display:grid;grid-template-columns:1fr 1fr;gap:12px;">
