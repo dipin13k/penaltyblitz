@@ -206,30 +206,9 @@ function initGame() {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
 
     if (id === 'connect') {
-      // Replace connect screen with "Open in Base App" message
-      const connectMsg = `
-<div id="screen-connect" style="
-  position:fixed;inset:0;
-  background:#0d0d1a;
-  display:flex;flex-direction:column;
-  align-items:center;justify-content:center;
-  color:white;font-family:sans-serif;
-  padding:20px;text-align:center;
-">
-  <div style="font-size:48px;margin-bottom:16px">⚽</div>
-  <div style="
-    font-size:22px;font-weight:bold;
-    color:#00ff88;margin-bottom:12px;
-  ">Penalty Blitz</div>
-  <div style="
-    font-size:14px;color:#aaa;
-    line-height:1.6;max-width:280px;
-  ">
-    Open this app inside Base App or Warpcast
-    to play and connect your wallet automatically.
-  </div>
-</div>`
-      document.body.insertAdjacentHTML('beforeend', connectMsg)
+      // Connect screen shows nothing - just blank dark screen
+      // This allows the app to load and wait for wallet connection
+      // without showing any message
     } else {
       el(`screen-${id}`)?.classList.add('active');
     }
