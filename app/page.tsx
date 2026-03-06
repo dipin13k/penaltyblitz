@@ -119,7 +119,9 @@ function initGame() {
 
   const S = {
     wallet: null as string | null,
+    fid: null as number | null,
     username: null as string | null,
+    avatarUrl: null as string | null,
     diff: 'medium' as 'easy' | 'medium' | 'hard',
     myTurn: true,
     round: 1, maxRounds: 5,
@@ -145,35 +147,101 @@ function initGame() {
     clearAllIntervals();
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     el(`screen-${id}`)?.classList.add('active');
-    if(id === 'leaderboard') {
+    if (id === 'leaderboard') {
       (window as any).forceRefreshLeaderboard();
+    }
+    const nav = document.getElementById('bottomNav');
+    if (nav) {
+      const showNavScreens = ['menu', 'leaderboard', 'profile'];
+      nav.style.display = showNavScreens.includes(id) ? 'flex' : 'none';
+    }
+    if (id === 'menu' && S.wallet) {
+      setTimeout(() => showOnboardingIfNeeded(), 300);
     }
   }
 
-  ;(window as any).showScreen = showScreen;
+  ; (window as any).showScreen = showScreen;
 
-  ; (window as any).__onWalletStateChange = async (address: string | null) => {
-    S.wallet = address;
+  async function getFarcasterIdentity(): Promise<{
+    fid: number | null
+    username: string | null
+    avatarUrl: string | null
+  }> {
+    try {
+      const context = await sdk.context
+      if (context?.user) {
+        return {
+          fid: context.user.fid || null,
+          username: context.user.username || null,
+          avatarUrl: context.user.pfpUrl || null
+        }
+      }
+    } catch (e) {
+      console.log('Not in Farcaster context:', e)
+    }
+    return { fid: null, username: null, avatarUrl: null }
+  }
+
+  ; (window as any).__onWalletStateChange = async (
+    address: string | null
+  ) => {
+    S.wallet = address
     if (!address) {
-      showScreen('connect');
-      return;
+      showScreen('connect')
+      return
     }
-    const exists = await checkExistingUser(address);
-    if (exists) {
-      showScreen('menu');
-      loadMenuStats();
+
+    // Get Farcaster identity automatically
+    const identity = await getFarcasterIdentity()
+    S.fid = identity.fid
+    S.username = identity.username
+    S.avatarUrl = identity.avatarUrl
+
+    // Check if player exists in Supabase
+    const { data } = await supabase
+      .from('player_profiles')
+      .select('fid, username, avatar_url')
+      .eq('wallet_address', address)
+      .maybeSingle()
+
+    if (data) {
+      // Returning player — update identity if changed
+      if (identity.fid || identity.username) {
+        await supabase
+          .from('player_profiles')
+          .update({
+            fid: identity.fid || data.fid,
+            username: identity.username || data.username,
+            avatar_url: identity.avatarUrl || data.avatar_url
+          })
+          .eq('wallet_address', address)
+      }
+      showScreen('menu')
+      loadMenuStats()
     } else {
-      showScreen('username');
-      const badge = el('usernameBadge');
-      if (badge) badge.innerText = address.slice(0, 6) + '...' + address.slice(-4);
+      // New player — create profile automatically
+      // No username input screen needed
+      const { error } = await supabase
+        .from('player_profiles')
+        .insert({
+          wallet_address: address,
+          fid: identity.fid,
+          username: identity.username ||
+            address.slice(0, 6) + '...' + address.slice(-4),
+          avatar_url: identity.avatarUrl
+        })
+      if (!error) {
+        showScreen('menu')
+        loadMenuStats()
+      }
     }
-  };
+  }
 
   const pending = (window as any).__pendingWalletAddr
   if (pending !== undefined) {
     delete (window as any).__pendingWalletAddr
     setTimeout(() => {
-      ;(window as any).__onWalletStateChange(pending)
+      ; (window as any).__onWalletStateChange(pending)
     }, 100)
   }
 
@@ -188,92 +256,10 @@ function initGame() {
     location.reload();
   };
 
-  async function checkExistingUser(addr: string) {
-    try {
-      const { data } = await supabase
-        .from('player_profiles')
-        .select('username')
-        .eq('wallet_address', addr)
-        .maybeSingle();
-      if (data?.username) {
-        S.username = data.username;
-        const tbU = el('topbarUsername'); if (tbU) tbU.innerText = data.username;
-        const tbA = el('topbarAddress'); if (tbA) tbA.innerText = addr.slice(0, 6) + '...' + addr.slice(-4);
-        return true;
-      }
-    } catch (_e) { }
-    return false;
-  }
-
-  ; (window as any).confirmUsername = async () => {
-    const input = el('usernameInput') as HTMLInputElement;
-    const errObj = el('usernameError');
-    if (!input || !errObj) return;
-
-    errObj.style.display = 'none';
-    const val = input.value.trim();
-
-    if (val.length < 3 || val.length > 16) {
-      errObj.innerText = 'Must be 3-16 characters';
-      errObj.style.display = 'block';
-      return;
-    }
-    if (!/^[a-zA-Z0-9_]+$/.test(val)) {
-      errObj.innerText = 'Letters, numbers, underscores only';
-      errObj.style.display = 'block';
-      return;
-    }
-
-    const btn = el('confirmUsernameBtn');
-    if (btn) btn.innerText = 'SAVING...';
-
-    try {
-      const { data: exist } = await supabase
-        .from('player_profiles')
-        .select('username')
-        .eq('username', val)
-        .maybeSingle();
-
-      if (exist) {
-        errObj.innerText = 'Username already taken';
-        errObj.style.display = 'block';
-        if (btn) btn.innerText = 'LET\'S PLAY →';
-        return;
-      }
-
-      const { error } = await supabase.from('player_profiles').insert({
-        wallet_address: S.wallet,
-        username: val
-      });
-
-      if (error) throw error;
-
-      S.username = val;
-      const tbU = el('topbarUsername'); if (tbU) tbU.innerText = val;
-      const tbA = el('topbarAddress'); if (tbA) tbA.innerText = S.wallet?.slice(0, 6) + '...' + S.wallet?.slice(-4);
-
-      showScreen('menu');
-      loadMenuStats();
-    } catch (_e: unknown) {
-      errObj.innerText = 'Failed to save. Try again.';
-      errObj.style.display = 'block';
-    }
-    if (btn) btn.innerText = 'LET\'S PLAY →';
-  };
-
-  const inputEl = el('usernameInput');
-  if (inputEl) {
-    inputEl.addEventListener('input', (e) => {
-      const t = e.target as HTMLInputElement;
-      const c = el('charCounter');
-      if (c) c.innerText = `${t.value.length} / 16`;
-    });
-  }
-
   async function loadMenuStats() {
     if (!S.wallet) return;
     const row = el('menuStatsRow');
-    if(row) {
+    if (row) {
       row.style.display = 'flex';
       row.innerHTML = '<div class="spinner" style="border-width:2px;width:24px;height:24px;margin:10px auto"></div>';
     }
@@ -284,7 +270,7 @@ function initGame() {
         .eq('wallet_address', S.wallet)
         .maybeSingle();
       if (!data) throw new Error();
-      if(row) {
+      if (row) {
         row.innerHTML = `
           <div class="menu-stat">
             <div class="menu-stat-num">${data.total_matches}</div>
@@ -302,12 +288,12 @@ function initGame() {
           </div>
         `;
       }
-    } catch(_e) {
-      if(row) row.style.display = 'none';
+    } catch (_e) {
+      if (row) row.style.display = 'none';
     }
   }
 
-  ;(window as any).startGame = (diff: 'easy'|'medium'|'hard') => {
+  ; (window as any).startGame = (diff: 'easy' | 'medium' | 'hard') => {
     S.diff = diff;
     S.round = 1; S.pScore = 0; S.aScore = 0;
     S.isSuddenDeath = false; S.gameOver = false;
@@ -320,31 +306,31 @@ function initGame() {
   function updateScoreUI() {
     const pEl = el('playerScoreEl');
     const aEl = el('aiScoreEl');
-    if(pEl) pEl.innerText = S.pScore.toString();
-    if(aEl) aEl.innerText = S.aScore.toString();
+    if (pEl) pEl.innerText = S.pScore.toString();
+    if (aEl) aEl.innerText = S.aScore.toString();
   }
 
   function playCountdown() {
     S.busy = true;
     const ov = el('countdownOverlay');
     const num = el('countNum');
-    if(!ov || !num) return;
+    if (!ov || !num) return;
     ov.style.display = 'flex';
-    
+
     let count = 3;
     num.innerText = count.toString();
     num.style.animation = 'none';
     void num.offsetWidth;
     num.style.animation = 'countPop 0.8s ease forwards';
-    
+
     safeSetInterval(() => {
       count--;
-      if(count > 0) {
+      if (count > 0) {
         num.innerText = count.toString();
         num.style.animation = 'none';
         void num.offsetWidth;
         num.style.animation = 'countPop 0.8s ease forwards';
-      } else if(count === 0) {
+      } else if (count === 0) {
         num.innerText = 'GO!';
         num.style.color = '#00ff88';
         num.style.animation = 'none';
@@ -363,7 +349,7 @@ function initGame() {
     const p = el('roundPopup');
     const rt = el('roundText');
     const rs = el('roundSub');
-    if(!p || !rt || !rs) return;
+    if (!p || !rt || !rs) return;
     rt.innerText = `ROUND ${rNum}`;
     rs.innerText = S.isSuddenDeath ? 'Sudden Death' : 'of 5';
     p.style.display = 'flex';
@@ -377,23 +363,23 @@ function initGame() {
     S.myTurn = true;
     resetField();
     const ind = el('turnIndicator');
-    if(ind) {
+    if (ind) {
       ind.innerText = 'YOUR TURN ⚽';
       ind.style.color = '#00d4ff';
     }
     el('ai-player')!.style.display = 'none';
     el('keeper')!.style.display = 'block';
-    
+
     el('diveLeft')!.style.display = 'none';
     el('diveCenter')!.style.display = 'none';
     el('diveRight')!.style.display = 'none';
-    
+
     S.busy = false;
-    
+
     el('shootBtn')!.style.display = 'flex';
     el('powerBarWrap')!.style.display = 'flex';
     el('aimCursor')!.style.display = 'block';
-    
+
     startAim();
   }
 
@@ -401,7 +387,7 @@ function initGame() {
     const ball = el('ball');
     const spot = el('penalty-spot');
     const app = el('app');
-    if(ball && spot && app) {
+    if (ball && spot && app) {
       const spotRect = spot.getBoundingClientRect();
       const appRect = app.getBoundingClientRect();
       ball.style.transition = 'none';
@@ -410,7 +396,7 @@ function initGame() {
       ball.style.top = (spotRect.top - appRect.top - 22) + 'px';
     }
     const kw = el('keeper-dive-wrapper');
-    if(kw) kw.style.transform = 'translate(0,0) rotate(0)';
+    if (kw) kw.style.transform = 'translate(0,0) rotate(0)';
   }
 
   const T = {
@@ -418,23 +404,23 @@ function initGame() {
     keeperReturn: 400,
   };
 
-  function diveKeeper(dir: 'left'|'center'|'right') {
+  function diveKeeper(dir: 'left' | 'center' | 'right') {
     const kw = el('keeper-dive-wrapper');
-    if(!kw) return;
-    
+    if (!kw) return;
+
     kw.style.transition = `transform ${T.keeperDive}ms cubic-bezier(0.1, 0.8, 0.2, 1)`;
-    
-    if(dir === 'left') {
+
+    if (dir === 'left') {
       kw.style.transform = 'translateX(-50px) rotate(-65deg)';
-    } else if(dir === 'right') {
+    } else if (dir === 'right') {
       kw.style.transform = 'translateX(50px) rotate(65deg)';
     } else {
       kw.style.transform = 'translateY(-30px)';
     }
-    
+
     setTimeout(() => {
       const kwr = el('keeper-dive-wrapper');
-      if(kwr) {
+      if (kwr) {
         kwr.style.transition = `transform ${T.keeperReturn}ms ease-in-out`;
         kwr.style.transform = 'none';
       }
@@ -447,10 +433,10 @@ function initGame() {
 
   function resetCursor() {
     const net = el('net');
-    if(!net) return;
+    if (!net) return;
     const cw = net.getBoundingClientRect().width;
     const ch = net.getBoundingClientRect().height;
-    S.aimX = cw/2; S.aimY = ch*0.8;
+    S.aimX = cw / 2; S.aimY = ch * 0.8;
   }
 
   function startAim() {
@@ -458,19 +444,19 @@ function initGame() {
     S.aimDirX = 1; S.aimDirY = 1;
     S.pBar = 0; S.pDir = 1;
     updatePowerUI();
-    
-    if(S.animId) cancelAnimationFrame(S.animId);
-    if(S.pLoopId) clearInterval(S.pLoopId);
-    
+
+    if (S.animId) cancelAnimationFrame(S.animId);
+    if (S.pLoopId) clearInterval(S.pLoopId);
+
     const d = DIFF[S.diff];
-    
+
     S.pLoopId = safeSetInterval(() => {
       S.pBar += 2 * S.pDir;
-      if(S.pBar >= 100) { S.pBar = 100; S.pDir = -1; }
-      if(S.pBar <= 0) { S.pBar = 0; S.pDir = 1; }
+      if (S.pBar >= 100) { S.pBar = 100; S.pDir = -1; }
+      if (S.pBar <= 0) { S.pBar = 0; S.pDir = 1; }
       updatePowerUI();
-    }, 1000/C.FPS);
-    
+    }, 1000 / C.FPS);
+
     const loop = () => {
       moveCursor(d.pSpeed);
       S.animId = requestAnimationFrame(loop);
@@ -481,87 +467,87 @@ function initGame() {
   function updatePowerUI() {
     const f = el('powerBarFill');
     const pl = el('powerLine');
-    if(f) f.style.clipPath = `inset(${100 - S.pBar}% 0 0 0)`;
-    if(pl) pl.style.bottom = `${S.pBar}%`;
+    if (f) f.style.clipPath = `inset(${100 - S.pBar}% 0 0 0)`;
+    if (pl) pl.style.bottom = `${S.pBar}%`;
   }
 
   function moveCursor(baseSpeed: number) {
     const net = el('net');
     const cursor = el('aimCursor');
-    if(!net || !cursor) return;
-    
+    if (!net || !cursor) return;
+
     const rect = net.getBoundingClientRect();
     const w = rect.width; const h = rect.height;
     const r = 26; // HALF OF CURSOR WIDTH
-    
+
     S.aimX += baseSpeed * 1.5 * S.aimDirX;
     S.aimY += baseSpeed * S.aimDirY;
-    
+
     const fuzz = 4;
-    if(S.aimX < r-fuzz) { S.aimX = r-fuzz; S.aimDirX *= -1; }
-    if(S.aimX > w-(r-fuzz)) { S.aimX = w-(r-fuzz); S.aimDirX *= -1; }
-    if(S.aimY < r-fuzz) { S.aimY = r-fuzz; S.aimDirY *= -1; }
-    if(S.aimY > h-(r-fuzz)) { S.aimY = h-(r-fuzz); S.aimDirY *= -1; }
-    
+    if (S.aimX < r - fuzz) { S.aimX = r - fuzz; S.aimDirX *= -1; }
+    if (S.aimX > w - (r - fuzz)) { S.aimX = w - (r - fuzz); S.aimDirX *= -1; }
+    if (S.aimY < r - fuzz) { S.aimY = r - fuzz; S.aimDirY *= -1; }
+    if (S.aimY > h - (r - fuzz)) { S.aimY = h - (r - fuzz); S.aimDirY *= -1; }
+
     cursor.style.left = `${S.aimX}px`;
     cursor.style.top = `${S.aimY}px`;
   }
 
-  ;(window as any).handleShoot = () => {
-    if(S.busy) return;
+  ; (window as any).handleShoot = () => {
+    if (S.busy) return;
     S.busy = true;
-    
-    if(S.animId) cancelAnimationFrame(S.animId);
-    if(S.pLoopId) clearInterval(S.pLoopId);
-    
+
+    if (S.animId) cancelAnimationFrame(S.animId);
+    if (S.pLoopId) clearInterval(S.pLoopId);
+
     el('shootBtn')!.style.display = 'none';
     el('powerBarWrap')!.style.display = 'none';
     el('aimCursor')!.style.display = 'none';
-    
+
     const pwr = S.pBar;
     const net = el('net');
-    const rect = net?.getBoundingClientRect() || {width:200,height:172};
-    
+    const rect = net?.getBoundingClientRect() || { width: 200, height: 172 };
+
     let fx = S.aimX / rect.width;  // 0 to 1
     let fy = S.aimY / rect.height; // 0 to 1
-    
-    if(pwr > 80) { // risky mode
+
+    if (pwr > 80) { // risky mode
       const err = ((pwr - 80) / 20) * 0.15;
       fx += (Math.random() * err * 2) - err;
       fy -= (Math.random() * err); // tends to go high
     }
-    
+
     const screenW = el('app')?.getBoundingClientRect().width || window.innerWidth;
     const netCenterScreen = screenW / 2;
     const tx = (fx - 0.5) * rect.width;
     const ty = -(rect.height - (fy * rect.height)) - C.KEEPER_Y;
-    
+
     const isGoal = checkGoal(fx, fy, pwr);
-    
-    const shotDir: 'left'|'center'|'right' = tx < -20 ? 'left' : tx > 20 ? 'right' : 'center';
+
+    const shotDir: 'left' | 'center' | 'right' = tx < -20 ? 'left' : tx > 20 ? 'right' : 'center';
     diveKeeper(shotDir);
-    
+
     const ball = el('ball');
     const app = el('app');
-    if(ball && net && app) {
+    if (ball && net && app) {
       const netRect = net.getBoundingClientRect();
       const appRect = app.getBoundingClientRect();
-      
+
       const targetX = (netRect.left - appRect.left) + S.aimX - 22;
       const targetY = (netRect.top - appRect.top) + S.aimY - 22;
-      
+
       ball.style.transition = 'all 0.4s ease-in';
       ball.style.left = targetX + 'px';
       ball.style.top = targetY + 'px';
       ball.style.transform = 'scale(0.3) rotate(360deg)';
-      
+
       const outLeft = fx < 0; const outRight = fx > 1; const outTop = fy < 0;
       const isOut = outLeft || outRight || outTop;
-      
+
       setTimeout(() => {
-        if(isOut) {
+        if (isOut) {
           showText('MISS!', '#ff3535');
-        } else if(isGoal) {
+        } else if (isGoal) {
           S.pScore++;
           S.matchStats.goals++;
           updateScoreUI();
@@ -572,23 +558,23 @@ function initGame() {
         }
       }, C.BALL_WAIT);
     }
-    
+
     setTimeout(() => {
       checkRoundEnd();
     }, C.BALL_WAIT + C.POST_SHOOT_WAIT);
   };
 
   function checkGoal(fx: number, fy: number, pwr: number) {
-    if(fx < 0 || fx > 1 || fy < 0) return false;
+    if (fx < 0 || fx > 1 || fy < 0) return false;
     const distToCenter = Math.abs(fx - 0.5);
     const d = DIFF[S.diff];
-    
-    if(pwr >= 40 && pwr <= 80) { // strong
-      if(distToCenter > 0.3) return true;
+
+    if (pwr >= 40 && pwr <= 80) { // strong
+      if (distToCenter > 0.3) return true;
       return Math.random() > d.kSpeed * 2.5;
     }
-    if(pwr < 40) { // weak
-      if(distToCenter > 0.4) return Math.random() > 0.3;
+    if (pwr < 40) { // weak
+      if (distToCenter > 0.4) return Math.random() > 0.3;
       return false;
     }
     // risky (pwr > 80)
@@ -597,50 +583,50 @@ function initGame() {
 
   function showText(msg: string, color: string) {
     const app = el('app');
-    if(!app) return;
+    if (!app) return;
     const d = document.createElement('div');
     d.className = 'outcome-text';
     d.style.color = color;
     d.innerText = msg;
     app.appendChild(d);
-    
-    if(msg === 'GOAL!') {
+
+    if (msg === 'GOAL!') {
       app.style.animation = 'none';
       void app.offsetWidth;
       app.style.animation = 'screenShake 0.4s ease';
     }
-    
+
     setTimeout(() => d.remove(), 1100);
   }
 
   function triggerNetRipple() {
     const rp = el('net-ripple');
-    if(!rp) return;
+    if (!rp) return;
     rp.style.opacity = '1';
     setTimeout(() => { rp.style.opacity = '0'; }, 300);
   }
 
   function checkRoundEnd() {
-    if(S.myTurn) {
+    if (S.myTurn) {
       beginAiTurn();
     } else {
       let over = false;
-      if(!S.isSuddenDeath) {
+      if (!S.isSuddenDeath) {
         const rem = S.maxRounds - S.round;
         const diff = Math.abs(S.pScore - S.aScore);
-        if(diff > rem) over = true;
-        else if(S.round === S.maxRounds) {
-          if(diff === 0) {
+        if (diff > rem) over = true;
+        else if (S.round === S.maxRounds) {
+          if (diff === 0) {
             S.isSuddenDeath = true;
             showSuddenDeath();
             return;
           } else over = true;
         }
       } else {
-        if(S.pScore !== S.aScore) over = true;
+        if (S.pScore !== S.aScore) over = true;
       }
-      
-      if(over) {
+
+      if (over) {
         endGame();
       } else {
         S.round++;
@@ -653,9 +639,9 @@ function initGame() {
 
   function showSuddenDeath() {
     const o = el('suddenDeathOverlay');
-    if(o) o.style.display = 'flex';
+    if (o) o.style.display = 'flex';
     setTimeout(() => {
-      if(o) o.style.display = 'none';
+      if (o) o.style.display = 'none';
       S.round++;
       beginPlayerTurn();
     }, C.SUDDEN_DEATH_DUR);
@@ -664,7 +650,7 @@ function initGame() {
   function showBetweenRounds(txt: string, cb: Function) {
     const s = el('betweenStrip');
     const t = el('betweenText');
-    if(!s || !t) return;
+    if (!s || !t) return;
     t.innerText = txt;
     s.style.display = 'flex';
     s.style.animation = 'none';
@@ -679,132 +665,132 @@ function initGame() {
   function beginAiTurn() {
     S.myTurn = false;
     resetField();
-    
+
     const ind = el('turnIndicator');
-    if(ind) {
+    if (ind) {
       ind.innerText = 'AI TURN 🤖';
       ind.style.color = '#ff3535';
     }
-    
+
     el('keeper')!.style.display = 'block';
     el('keeper')!.style.visibility = 'visible';
     el('ai-player')!.style.display = 'flex';
     el('ai-player')!.style.animation = 'none';
-    
+
     el('shootBtn')!.style.display = 'none';
     el('powerBarWrap')!.style.display = 'none';
     el('aimCursor')!.style.display = 'none';
-    
+
     el('diveLeft')!.style.display = 'block';
     el('diveCenter')!.style.display = 'block';
     el('diveRight')!.style.display = 'block';
-    
+
     const sw = el('swingArrow');
-    if(sw) {
+    if (sw) {
       sw.style.display = 'block';
       let dir = 1;
       let rot = 0;
       S.arrowPos = 50;
-      if(S.pLoopId) clearInterval(S.pLoopId);
-      
-      const arrowSpeed = 
+      if (S.pLoopId) clearInterval(S.pLoopId);
+
+      const arrowSpeed =
         S.diff === 'easy' ? 1.5 :
-        S.diff === 'medium' ? 3.5 :
-        6;
-      
-      const arrowMs = 
-        S.diff === 'easy' ? 1000/30 :
-        S.diff === 'medium' ? 1000/45 :
-        1000/60;
-      
+          S.diff === 'medium' ? 3.5 :
+            6;
+
+      const arrowMs =
+        S.diff === 'easy' ? 1000 / 30 :
+          S.diff === 'medium' ? 1000 / 45 :
+            1000 / 60;
+
       S.pLoopId = safeSetInterval(() => {
         rot += arrowSpeed * dir;
-        if(rot >= 70) { rot = 70; dir = -1; }
-        if(rot <= -70) { rot = -70; dir = 1; }
+        if (rot >= 70) { rot = 70; dir = -1; }
+        if (rot <= -70) { rot = -70; dir = 1; }
         sw.style.left = `calc(50% + ${rot}px - 16px)`;
         S.arrowPos = ((rot + 70) / 140) * 100;
       }, arrowMs);
     }
-    
+
     S.busy = false;
   }
 
-  ;(window as any).handleDive = (dir: 'left'|'center'|'right') => {
-    if(S.busy) return;
+  ; (window as any).handleDive = (dir: 'left' | 'center' | 'right') => {
+    if (S.busy) return;
     S.busy = true;
-    
-    if(S.pLoopId) clearInterval(S.pLoopId);
+
+    if (S.pLoopId) clearInterval(S.pLoopId);
     el('swingArrow')!.style.display = 'none';
-    
+
     const capturedPos = S.arrowPos;
-    let arrowZone: 'left'|'center'|'right';
-    if(capturedPos < 33) {
+    let arrowZone: 'left' | 'center' | 'right';
+    if (capturedPos < 33) {
       arrowZone = 'left';
-    } else if(capturedPos < 66) {
+    } else if (capturedPos < 66) {
       arrowZone = 'center';
     } else {
       arrowZone = 'right';
     }
-    
+
     console.log('Arrow pos:', capturedPos, 'Arrow zone:', arrowZone, 'Player dove:', dir);
-    
+
     el('diveLeft')!.style.display = 'none';
     el('diveCenter')!.style.display = 'none';
     el('diveRight')!.style.display = 'none';
-    
+
     const ai = el('ai-player');
-    if(ai) ai.style.animation = 'runUp 0.4s ease forwards';
-    
+    if (ai) ai.style.animation = 'runUp 0.4s ease forwards';
+
     setTimeout(() => {
       resolveAiShot(dir, arrowZone);
     }, 400);
   };
 
-  function resolveAiShot(playerDiveDir: 'left'|'center'|'right', arrowZone: 'left'|'center'|'right') {
+  function resolveAiShot(playerDiveDir: 'left' | 'center' | 'right', arrowZone: 'left' | 'center' | 'right') {
     const aiShotDir = arrowZone;
-    
+
     let actualShotDir = aiShotDir;
     if (S.diff === 'hard' && Math.random() < 0.25) {
-      const others = ['left','center','right'].filter(d => d !== aiShotDir);
-      actualShotDir = others[Math.floor(Math.random() * others.length)] as 'left'|'center'|'right';
+      const others = ['left', 'center', 'right'].filter(d => d !== aiShotDir);
+      actualShotDir = others[Math.floor(Math.random() * others.length)] as 'left' | 'center' | 'right';
       console.log('Hard mode feint! Arrow:', aiShotDir, 'Actual:', actualShotDir);
     }
-    
+
     const net = el('net');
     const app = el('app');
-    const rect = net?.getBoundingClientRect() || {width:200,height:172};
-    
+    const rect = net?.getBoundingClientRect() || { width: 200, height: 172 };
+
     let targetLocalX: number;
-    if(actualShotDir === 'left') targetLocalX = rect.width * 0.2;
-    else if(actualShotDir === 'right') targetLocalX = rect.width * 0.8;
+    if (actualShotDir === 'left') targetLocalX = rect.width * 0.2;
+    else if (actualShotDir === 'right') targetLocalX = rect.width * 0.8;
     else targetLocalX = rect.width * 0.5;
     const targetLocalY = rect.height * 0.35;
-    
+
     let tx = 0, ty = 0;
-    if(net && app) {
+    if (net && app) {
       const netRect = net.getBoundingClientRect();
       const appRect = app.getBoundingClientRect();
       tx = (netRect.left - appRect.left) + targetLocalX - 22;
       ty = (netRect.top - appRect.top) + targetLocalY - 22;
     }
-    
+
     // Switch to keeper view
     el('ai-player')!.style.display = 'none';
     el('keeper')!.style.display = 'block';
-    
+
     diveKeeper(playerDiveDir);
-    
+
     const ball = el('ball');
-    if(ball) {
+    if (ball) {
       ball.style.transition = 'all 0.4s ease-in';
       ball.style.left = tx + 'px';
       ball.style.top = ty + 'px';
       ball.style.transform = 'scale(0.3) rotate(360deg)';
-      
+
       const isSave = actualShotDir === playerDiveDir;
-      
+
       setTimeout(() => {
-        if(isSave) {
+        if (isSave) {
           S.matchStats.saves++;
           showText('SAVED!', '#00ff88');
         } else {
@@ -814,7 +800,7 @@ function initGame() {
           showText('GOAL!', '#ff3535');
         }
       }, C.BALL_WAIT);
-      
+
       setTimeout(() => {
         checkRoundEnd();
       }, C.BALL_WAIT + C.POST_SHOOT_WAIT);
@@ -824,23 +810,23 @@ function initGame() {
   function endGame() {
     S.gameOver = true;
     showScreen('results');
-    
+
     const isWin = S.pScore > S.aScore;
     const isDraw = S.pScore === S.aScore;
-    
+
     const t = el('resultTitle');
     const e = el('resultEmoji');
     const s = el('resultScore');
     const cg = el('statGoals');
     const cs = el('statSaves');
-    
-    if(t) t.innerText = isWin ? 'VICTORY!' : (isDraw ? 'DRAW' : 'DEFEAT');
-    if(e) e.innerText = isWin ? '🏆' : (isDraw ? '🤝' : '💀');
-    if(s) s.innerText = `${S.pScore} — ${S.aScore}`;
-    if(cg) cg.innerText = S.matchStats.goals.toString();
-    if(cs) cs.innerText = S.matchStats.saves.toString();
-    
-    if(isWin) spawnConfetti();
+
+    if (t) t.innerText = isWin ? 'VICTORY!' : (isDraw ? 'DRAW' : 'DEFEAT');
+    if (e) e.innerText = isWin ? '🏆' : (isDraw ? '🤝' : '💀');
+    if (s) s.innerText = `${S.pScore} — ${S.aScore}`;
+    if (cg) cg.innerText = S.matchStats.goals.toString();
+    if (cs) cs.innerText = S.matchStats.saves.toString();
+
+    if (isWin) spawnConfetti();
 
     console.log('endGame called, wallet:', S.wallet, 'username:', S.username, 'isWin:', isWin)
 
@@ -853,45 +839,41 @@ function initGame() {
   }
 
   async function saveMatchResult(isWin: boolean) {
-    console.log('=== saveMatchResult called ===')
-    console.log('wallet:', S.wallet)
-    console.log('isWin:', isWin)
-    console.log('goals:', S.matchStats.goals)
-    console.log('saves:', S.matchStats.saves)
+    console.log('=== saveMatchResult ===',
+      'wallet:', S.wallet,
+      'fid:', S.fid,
+      'username:', S.username,
+      'isWin:', isWin)
 
-    if (!S.wallet) {
-      console.log('NO WALLET — aborting save')
-      return
-    }
-    if (!S.username) {
-      console.log('NO USERNAME — aborting save')
-      return
-    }
+    if (!S.wallet) return
 
     try {
       const result = await supabase.rpc(
         'upsert_player_stats', {
-          p_wallet: S.wallet,
-          p_is_win: isWin,
-          p_goals: S.matchStats.goals,
-          p_saves: S.matchStats.saves
-        }
+        p_wallet: S.wallet,
+        p_fid: S.fid,
+        p_username: S.username,
+        p_avatar_url: S.avatarUrl,
+        p_is_win: isWin,
+        p_goals: S.matchStats.goals,
+        p_saves: S.matchStats.saves
+      }
       )
-      console.log('Supabase RPC result:', result)
+      console.log('Save result:', result)
       if (result.error) {
         console.error('Supabase error:', result.error)
       } else {
         console.log('Stats saved successfully!')
       }
-    } catch(e) {
-      console.error('saveMatchResult exception:', e)
+    } catch (e) {
+      console.error('saveMatchResult error:', e)
     }
   }
 
-  ;(window as any).onPlayAgain = () => (window as any).startGame(S.diff);
-  ;(window as any).onMainMenu = () => { showScreen('menu'); loadMenuStats(); };
+  ; (window as any).onPlayAgain = () => (window as any).startGame(S.diff);
+  ; (window as any).onMainMenu = () => { showScreen('menu'); loadMenuStats(); };
 
-  ;(window as any).forceRefreshLeaderboard = () => {
+  ; (window as any).forceRefreshLeaderboard = () => {
     cachedLeaderboardData = null;
     leaderboardCacheTime = 0;
     loadLeaderboard();
@@ -900,49 +882,49 @@ function initGame() {
   async function loadLeaderboard() {
     const cont = el('leaderboardContent');
     const myRank = el('myRankBar');
-    if(!cont || !myRank) return;
-    
+    if (!cont || !myRank) return;
+
     cachedLeaderboardData = null;
     leaderboardCacheTime = 0;
-    
+
     cont.innerHTML = '<div class="spinner"></div>';
-    
+
     try {
       console.log('Fetching leaderboard...');
       const { data, error } = await supabase
         .from('player_profiles')
-        .select('username, wallet_address, total_wins, win_rate, total_matches, leaderboard_score')
+        .select('username, wallet_address, total_wins, win_rate, total_matches, leaderboard_score, avatar_url')
         .order('leaderboard_score', { ascending: false })
         .order('total_wins', { ascending: false })
         .gte('total_matches', 1)
         .limit(100);
-      
+
       console.log('Leaderboard result:', data, 'error:', error);
-      
-      if(error) {
+
+      if (error) {
         console.error('Leaderboard error:', error);
         cont.innerHTML = `<div class="error-text">Error: ${error.message}</div>`;
         return;
       }
-      
+
       cachedLeaderboardData = data;
       leaderboardCacheTime = Date.now();
-      
+
       renderLeaderboard(data);
-    } catch(e: any) {
+    } catch (e: any) {
       console.error('Leaderboard exception:', e);
       cont.innerHTML = `<div class="error-text">Failed to load: ${e?.message || 'Unknown'}</div>`;
     }
   }
-  
+
   function renderLeaderboard(data: any) {
     const cont = el('leaderboardContent');
     const myRank = el('myRankBar');
-    if(!cont || !myRank) return;
-    
+    if (!cont || !myRank) return;
+
     console.log('Rendering leaderboard with data:', data);
-    
-    if(!data || data.length === 0) {
+
+    if (!data || data.length === 0) {
       cont.innerHTML = `
         <div class="placeholder-wrap">
           <div class="placeholder-emoji">🤷‍♂️</div>
@@ -951,36 +933,72 @@ function initGame() {
       `;
       return;
     }
-    
+
     let html = '';
     type PlayerRow = { rank: number; username: string; win_rate: number; total_wins: number; wallet_address: string; leaderboard_score: number };
     let meFound: PlayerRow | null = null;
-    
+
     data.forEach((p: any, i: number) => {
       const rank = i + 1;
       const isMe = p.wallet_address === S.wallet;
-      if(isMe) {
+      if (isMe) {
         meFound = { ...p, rank };
       }
+      const row = p;
+      const index = i;
       html += `
-        <div class="lb-row ${isMe ? 'is-me' : ''}">
-          <div class="lb-rank">
-            ${rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':`<span class="lb-rank-num">${rank}</span>`}
-          </div>
-          <div class="lb-name">${p.username} ${isMe?'<span class="lb-you-tag">(YOU)</span>':''}</div>
-          <div style="text-align:right;margin-right:8px;">
-            <div class="lb-wr">${p.leaderboard_score || 0} pts</div>
-            <div style="font-family:Rajdhani,sans-serif;font-size:11px;color:#555;">${p.win_rate}% · ${p.total_wins}W</div>
-          </div>
-        </div>
-      `;
+<div style="
+  display:flex;align-items:center;
+  padding:10px 16px;gap:12px;
+  border-bottom:1px solid #222;
+  background: ${index === 0 ? '#1e2a1e' :
+          index === 1 ? '#1e1e2a' :
+            index === 2 ? '#2a1e1e' : 'transparent'};
+">
+  <div style="
+    width:28px;text-align:center;
+    font-weight:bold;color:#666;font-size:13px;
+  ">${index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}</div>
+  
+  <div style="
+    width:32px;height:32px;border-radius:50%;
+    overflow:hidden;background:#333;flex-shrink:0;
+  ">
+    ${row.avatar_url ?
+          `<img src="${row.avatar_url}" 
+        style="width:100%;height:100%;object-fit:cover"/>` :
+          `<div style="
+        width:100%;height:100%;
+        display:flex;align-items:center;
+        justify-content:center;font-size:16px
+      ">👤</div>`
+        }
+  </div>
+
+  <div style="flex:1;min-width:0;">
+    <div style="
+      font-weight:bold;font-size:14px;
+      white-space:nowrap;overflow:hidden;
+      text-overflow:ellipsis;
+    ">${row.username ||
+        row.wallet_address.slice(0, 6) + '...' +
+        row.wallet_address.slice(-4)}</div>
+    <div style="font-size:11px;color:#888">
+      ${row.win_rate}% win rate
+    </div>
+  </div>
+
+  <div style="
+    font-weight:bold;color:#00ff88;font-size:15px;
+  ">${Math.round(row.leaderboard_score)}</div>
+</div>`;
     });
     cont.innerHTML = html;
-    
-    if(S.wallet && S.username) {
+
+    if (S.wallet && S.username) {
       myRank.style.display = 'flex';
       const mf = meFound as PlayerRow | null;
-      if(mf) {
+      if (mf) {
         updateMyRankBar(mf.rank, mf.username, mf.win_rate, mf.total_wins, mf.leaderboard_score);
       } else {
         updateMyRankBar('100+', S.username!, 0, 0, 0);
@@ -990,9 +1008,9 @@ function initGame() {
     }
   }
 
-  function updateMyRankBar(rank: string|number, name: string, wr: number, wins: number, score: number) {
+  function updateMyRankBar(rank: string | number, name: string, wr: number, wins: number, score: number) {
     const rb = el('myRankBar');
-    if(!rb) return;
+    if (!rb) return;
     rb.innerHTML = `
       <div class="lb-rank"><span class="lb-rank-num" style="color:#00d4ff">${rank}</span></div>
       <div class="lb-name">${name} <span class="lb-you-tag">(YOU)</span></div>
@@ -1005,19 +1023,250 @@ function initGame() {
 
   function spawnConfetti() {
     const sc = el('screen-results');
-    if(!sc) return;
-    for(let i=0; i<40; i++) {
+    if (!sc) return;
+    for (let i = 0; i < 40; i++) {
       const c = document.createElement('div');
       c.className = 'confetti-piece';
       c.style.left = '50%'; c.style.top = '40%';
-      c.style.background = `hsl(${Math.random()*360}, 100%, 60%)`;
-      const dx = (Math.random()-0.5)*300;
-      const dy = (Math.random()-0.5)*300;
+      c.style.background = `hsl(${Math.random() * 360}, 100%, 60%)`;
+      const dx = (Math.random() - 0.5) * 300;
+      const dy = (Math.random() - 0.5) * 300;
       c.style.setProperty('--dx', `${dx}px`);
       c.style.setProperty('--dy', `${dy}px`);
       sc.appendChild(c);
       setTimeout(() => c.remove(), 1100);
     }
   }
+
+  function showOnboardingIfNeeded() {
+    const seen = localStorage.getItem('pb_onboarding_seen')
+    if (seen) return
+
+    const html = `
+    <div id="onboardingOverlay" style="
+      position:fixed;inset:0;
+      background:rgba(0,0,0,0.85);
+      display:flex;align-items:center;
+      justify-content:center;
+      z-index:9999;padding:20px;
+    ">
+      <div style="
+        background:#1a1a2e;border-radius:20px;
+        padding:32px 24px;max-width:320px;
+        width:100%;text-align:center;
+        border:1px solid #333;color:white;
+        font-family:sans-serif;
+      ">
+        <div style="font-size:48px;margin-bottom:16px">⚽</div>
+        <div style="
+          font-size:22px;font-weight:bold;
+          color:#00ff88;margin-bottom:8px;
+        ">Welcome to Penalty Blitz!</div>
+        <div style="
+          font-size:14px;color:#aaa;
+          line-height:1.6;margin-bottom:24px;
+        ">
+          Compete in penalty shootouts and climb
+          the global leaderboard.<br/><br/>
+          <b style="color:white">⚡ How to play:</b><br/>
+          🎯 <b>Shooting:</b> Aim your shot and 
+          choose power carefully<br/>
+          🧤 <b>Saving:</b> Watch the arrow and 
+          dive the right way<br/>
+          🏆 <b>Win</b> to earn points and rank up!
+        </div>
+        <button onclick="
+          localStorage.setItem('pb_onboarding_seen','1');
+          document.getElementById('onboardingOverlay')
+            .remove();
+        " style="
+          background:#00ff88;color:#000;
+          border:none;border-radius:12px;
+          padding:14px 32px;font-size:16px;
+          font-weight:bold;cursor:pointer;
+          width:100%;
+        ">Let's Play! ⚽</button>
+      </div>
+    </div>`
+
+    document.body.insertAdjacentHTML('beforeend', html)
+    localStorage.setItem('pb_onboarding_seen', '1')
+  }
+
+  async function showProfileScreen() {
+    // Update active tab
+    const tabs = ['play', 'leaderboard', 'profile']
+    tabs.forEach(t => {
+      const el = document.getElementById(`tab-${t}`)
+      if (el) el.style.color =
+        t === 'profile' ? '#00ff88' : '#888'
+    })
+
+    // Fetch latest stats from Supabase
+    const { data } = await supabase
+      .from('player_profiles')
+      .select('*')
+      .eq('wallet_address', S.wallet)
+      .maybeSingle()
+
+    // Get rank
+    const { count } = await supabase
+      .from('player_profiles')
+      .select('*', { count: 'exact', head: true })
+      .gt('leaderboard_score', data?.leaderboard_score || 0)
+
+    const rank = (count || 0) + 1
+
+    const profileHTML = `
+    <div id="screen-profile" style="
+      position:fixed;inset:0;
+      background:linear-gradient(135deg,#0d0d1a 0%,#1a1a2e 100%);
+      display:flex;flex-direction:column;
+      align-items:center;
+      padding:40px 20px 80px;
+      overflow-y:auto;
+      color:white;
+      font-family:sans-serif;
+    ">
+      <!-- Avatar -->
+      <div style="
+        width:80px;height:80px;border-radius:50%;
+        overflow:hidden;border:3px solid #00ff88;
+        margin-bottom:12px;background:#333;
+      ">
+        ${S.avatarUrl ?
+        `<img src="${S.avatarUrl}" 
+            style="width:100%;height:100%;object-fit:cover"/>` :
+        `<div style="width:100%;height:100%;
+            display:flex;align-items:center;
+            justify-content:center;font-size:32px">👤</div>`
+      }
+      </div>
+
+      <!-- Username -->
+      <div style="
+        font-size:20px;font-weight:bold;
+        color:#00ff88;margin-bottom:4px;
+      ">
+        ${data?.username || 'Anonymous'}
+      </div>
+
+      <!-- Wallet address -->
+      <div style="
+        font-size:12px;color:#666;
+        margin-bottom:24px;
+      ">
+        ${S.wallet ?
+        S.wallet.slice(0, 6) + '...' + S.wallet.slice(-4) : ''}
+      </div>
+
+      <!-- Rank badge -->
+      <div style="
+        background:#1e1e3a;border:1px solid #00ff88;
+        border-radius:12px;padding:8px 24px;
+        font-size:14px;color:#00ff88;
+        margin-bottom:24px;
+      ">
+        🏆 Rank #${rank}
+      </div>
+
+      <!-- Stats grid -->
+      <div style="
+        width:100%;max-width:320px;
+        display:grid;grid-template-columns:1fr 1fr;
+        gap:12px;
+      ">
+        ${[
+        ['Matches', data?.total_matches || 0, '🎮'],
+        ['Wins', data?.total_wins || 0, '✅'],
+        ['Losses', data?.total_losses || 0, '❌'],
+        ['Win Rate', (data?.win_rate || 0) + '%', '📊'],
+        ['Goals', data?.total_goals_scored || 0, '⚽'],
+        ['Score', data?.leaderboard_score || 0, '⭐'],
+      ].map(([label, value, icon]) => `
+          <div style="
+            background:#1e1e3a;border-radius:12px;
+            padding:16px;text-align:center;
+            border:1px solid #333;
+          ">
+            <div style="font-size:20px">${icon}</div>
+            <div style="
+              font-size:22px;font-weight:bold;
+              color:#00ff88;margin:4px 0;
+            ">${value}</div>
+            <div style="font-size:11px;color:#888">${label}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>`
+
+    // Remove existing profile screen if any
+    const existing = document.getElementById('screen-profile')
+    if (existing) existing.remove()
+
+    document.body.insertAdjacentHTML('beforeend', profileHTML)
+  }
+
+  ; (window as any).switchTab = (tab: string) => {
+    // Update active tab styling
+    const tabs = ['play', 'leaderboard', 'profile']
+    tabs.forEach(t => {
+      const el = document.getElementById(`tab-${t}`)
+      if (el) el.style.color = t === tab ? '#00ff88' : '#888'
+    })
+
+    if (tab === 'play') showScreen('menu')
+    if (tab === 'leaderboard') showScreen('leaderboard')
+    if (tab === 'profile') showProfileScreen()
+  }
+
+  const bottomNav = `
+  <div id="bottomNav" style="
+    position:fixed;
+    bottom:0;
+    left:0;
+    right:0;
+    height:64px;
+    background:#1a1a2e;
+    border-top:1px solid #333;
+    display:flex;
+    align-items:center;
+    justify-content:space-around;
+    z-index:1000;
+    display:none;
+  ">
+    <button onclick="switchTab('play')" id="tab-play" style="
+      flex:1;height:64px;background:none;border:none;
+      color:#888;font-size:11px;cursor:pointer;
+      display:flex;flex-direction:column;
+      align-items:center;justify-content:center;gap:4px;
+      min-width:44px;
+    ">
+      <span style="font-size:20px">⚽</span>
+      <span>Play</span>
+    </button>
+    <button onclick="switchTab('leaderboard')" id="tab-leaderboard" style="
+      flex:1;height:64px;background:none;border:none;
+      color:#888;font-size:11px;cursor:pointer;
+      display:flex;flex-direction:column;
+      align-items:center;justify-content:center;gap:4px;
+      min-width:44px;
+    ">
+      <span style="font-size:20px">🏆</span>
+      <span>Leaderboard</span>
+    </button>
+    <button onclick="switchTab('profile')" id="tab-profile" style="
+      flex:1;height:64px;background:none;border:none;
+      color:#888;font-size:11px;cursor:pointer;
+      display:flex;flex-direction:column;
+      align-items:center;justify-content:center;gap:4px;
+      min-width:44px;
+    ">
+      <span style="font-size:20px">👤</span>
+      <span>Profile</span>
+    </button>
+  </div>`
+
+  document.body.insertAdjacentHTML('beforeend', bottomNav)
 
 }
