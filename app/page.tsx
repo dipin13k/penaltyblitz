@@ -4,7 +4,6 @@ import { useAccount } from 'wagmi';
 import { createClient } from '@supabase/supabase-js';
 import { useMiniKit } from '@coinbase/onchainkit/minikit';
 import { sdk } from '@farcaster/miniapp-sdk';
-import { useMiniApp } from '@neynar/react';
 import { getGameHTML } from './getGameHTML';
 import { getGameCSS } from './getGameCSS';
 
@@ -13,7 +12,6 @@ export default function GamePage() {
   const { address, isConnected } = useAccount();
   const [_isReady, setIsReady] = useState(false);
   const { setFrameReady } = useMiniKit();
-  const { context } = useMiniApp();
 
   useEffect(() => {
     setIsReady(true);
@@ -40,6 +38,7 @@ export default function GamePage() {
     return () => clearTimeout(timer)
   }, [isConnected, address])
 
+  // Two-step initialization to fix race condition
   useEffect(() => {
     if (!containerRef.current || document.getElementById('game-injected')) return;
 
@@ -50,11 +49,42 @@ export default function GamePage() {
 
     containerRef.current.innerHTML = getGameHTML();
 
-    // Pass miniapp context to window for initGame to use
-    ; (window as any).__miniAppContext = context
+    const load = async () => {
+      try {
+        await sdk.actions.ready()
+        console.log('SDK ready, context available')
+        const ctx = await sdk.context
+        console.log('Context user:', ctx?.user?.username)
+          ; (window as any).__miniAppContext = ctx
+      } catch (e) {
+        console.log('SDK context failed:', e)
+      }
+      // Don't call initGame() here - wait for wallet state change
+      console.log('SDK loaded, waiting for wallet state change...')
+    }
+    load()
+  }, []);
 
-    initGame();
-  }, [context]);
+  // Second step: initialize game when wallet state is available
+  useEffect(() => {
+    if (!isConnected && !address) return;
+
+    console.log('Wallet state changed, initializing game...')
+    // Small delay to ensure __onWalletStateChange has been called
+    setTimeout(() => {
+      if (typeof (window as any).initGame === 'function') {
+        console.log('Calling initGame...')
+          ; (window as any).initGame()
+      } else {
+        console.log('initGame not available yet, waiting...')
+        setTimeout(() => {
+          if (typeof (window as any).initGame === 'function') {
+            ; (window as any).initGame()
+          }
+        }, 1000)
+      }
+    }, 500)
+  }, [isConnected, address])
 
   return (
     <div ref={containerRef} style={{
@@ -68,50 +98,6 @@ export default function GamePage() {
 }
 
 function initGame() {
-  const loadingHTML = `
-<div id="screen-loading" style="
-  position:fixed;inset:0;
-  background:#0d0d1a;
-  display:flex;flex-direction:column;
-  align-items:center;justify-content:center;
-  color:white;font-family:sans-serif;
-  z-index:9999;
-">
-  <div style="font-size:48px;margin-bottom:16px">⚽</div>
-  <div style="font-size:18px;color:#00ff88">
-    Loading Penalty Blitz...
-  </div>
-</div>`
-  document.body.insertAdjacentHTML('beforeend', loadingHTML)
-
-  setTimeout(() => {
-    const loading = document.getElementById('screen-loading')
-    if (loading && !S.wallet) {
-      // Check if we are inside a mini app context
-      sdk.context.then((ctx: any) => {
-        if (ctx?.user) {
-          // We are inside Farcaster/Base App
-          // Keep loading and wait longer
-          console.log('Inside mini app, waiting longer...')
-          setTimeout(() => {
-            const l = document.getElementById('screen-loading')
-            if (l && !S.wallet) {
-              l.remove()
-              showScreen('connect')
-            }
-          }, 10000)
-        } else {
-          // Not inside mini app — show message
-          loading.remove()
-          showScreen('connect')
-        }
-      }).catch(() => {
-        loading.remove()
-        showScreen('connect')
-      })
-    }
-  }, 5000)
-
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -268,11 +254,9 @@ function initGame() {
     username: string | null
     avatarUrl: string | null
   }> {
-    // First try useMiniApp context (works on both
-    // Base App and Warpcast)
     const ctx = (window as any).__miniAppContext
     if (ctx?.user) {
-      console.log('Got identity from useMiniApp:',
+      console.log('Identity from SDK context:',
         ctx.user.username)
       return {
         fid: ctx.user.fid || null,
@@ -280,23 +264,7 @@ function initGame() {
         avatarUrl: ctx.user.pfpUrl || null
       }
     }
-
-    // Fallback to sdk.context
-    try {
-      const sdkCtx = await sdk.context
-      if (sdkCtx?.user) {
-        console.log('Got identity from sdk.context:',
-          sdkCtx.user.username)
-        return {
-          fid: sdkCtx.user.fid || null,
-          username: sdkCtx.user.username || null,
-          avatarUrl: sdkCtx.user.pfpUrl || null
-        }
-      }
-    } catch (e) {
-      console.log('sdk.context failed:', e)
-    }
-
+    console.log('No SDK context available')
     return { fid: null, username: null, avatarUrl: null }
   }
 
