@@ -22,35 +22,19 @@ export default function GamePage() {
   }, [setFrameReady]);
 
   useEffect(() => {
-    const timer = setTimeout(async () => {
-      if (isConnected && address) {
-        if ((window as any).__onWalletStateChange) {
-          (window as any).__onWalletStateChange(address)
-        } else {
-          (window as any).__pendingWalletAddr = address
-        }
-        return
-      }
+    console.log('=== wallet useEffect fired ===',
+      'isConnected:', isConnected,
+      'address:', address)
 
-      try {
-        const provider = await sdk.wallet.getEthereumProvider()
-        if (provider) {
-          const accounts = await provider.request({
-            method: 'eth_accounts'
-          }) as string[]
-          if (accounts && accounts[0]) {
-            console.log('Got address from Farcaster SDK:', accounts[0])
-            if ((window as any).__onWalletStateChange) {
-              (window as any).__onWalletStateChange(accounts[0])
-            } else {
-              (window as any).__pendingWalletAddr = accounts[0]
-            }
-          }
-        }
-      } catch (e) {
-        console.log('SDK wallet not available:', e)
+    const timer = setTimeout(() => {
+      const addr = isConnected ? (address ?? null) : null
+      console.log('Calling __onWalletStateChange with:', addr)
+      if ((window as any).__onWalletStateChange) {
+        (window as any).__onWalletStateChange(addr)
+      } else {
+        (window as any).__pendingWalletAddr = addr
       }
-    }, 800)
+    }, 500)
     return () => clearTimeout(timer)
   }, [isConnected, address])
 
