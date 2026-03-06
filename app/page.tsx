@@ -116,15 +116,17 @@ function initGame() {
     avatarUrl: string | null
   }> {
     try {
+      console.log('Calling Neynar for:', walletAddress)
       const res = await fetch(
         `https://api.neynar.com/v2/farcaster/user/bulk-by-address?addresses=${walletAddress}`,
         {
           headers: {
-            'api_key': process.env.NEXT_PUBLIC_NEYNAR_API_KEY || ''
+            'x-api-key': process.env.NEXT_PUBLIC_NEYNAR_API_KEY || ''
           }
         }
       )
       const data = await res.json()
+      console.log('Neynar response:', JSON.stringify(data))
       const users = data[walletAddress.toLowerCase()]
       if (users && users.length > 0) {
         const user = users[0]
@@ -994,13 +996,18 @@ function initGame() {
   }
 
   async function saveMatchResult(isWin: boolean) {
-    console.log('=== saveMatchResult ===',
-      'wallet:', S.wallet,
-      'fid:', S.fid,
-      'username:', S.username,
-      'isWin:', isWin)
+    console.log('=== saveMatchResult ===')
+    console.log('wallet:', S.wallet)
+    console.log('fid:', S.fid)
+    console.log('username:', S.username)
+    console.log('isWin:', isWin)
+    console.log('goals:', S.matchStats.goals)
+    console.log('saves:', S.matchStats.saves)
 
-    if (!S.wallet) return
+    if (!S.wallet) {
+      console.error('NO WALLET - cannot save')
+      return
+    }
 
     try {
       const result = await supabase.rpc(
@@ -1014,14 +1021,14 @@ function initGame() {
         p_saves: S.matchStats.saves
       }
       )
-      console.log('Save result:', result)
+      console.log('Save result:', JSON.stringify(result))
       if (result.error) {
         console.error('Supabase error:', result.error)
       } else {
         console.log('Stats saved successfully!')
       }
     } catch (e) {
-      console.error('saveMatchResult error:', e)
+      console.error('saveMatchResult exception:', e)
     }
   }
 

@@ -1,5 +1,5 @@
 export function getGameHTML() {
-    return `
+  return `
 <div id="app">
 
   <!--
@@ -9,34 +9,27 @@ export function getGameHTML() {
   ════════════════════════════════
   -->
   <div id="screen-connect" class="screen active">
-    <div class="connect-logo">
-      <div style="font-size:64px">⚽</div>
-      <h1>PENALTY<br>BLITZ</h1>
-      <p class="connect-tagline">Score. Save. Dominate.</p>
-    </div>
-    <div class="connect-card">
-      <div style="font-size:36px;text-align:center">🔐</div>
-      <div class="connect-card-title">Connect Your Wallet</div>
-      <div class="connect-card-sub">
-        Required to play, save stats, and appear on
-        the global leaderboard
+    <div style="
+      position:fixed;inset:0;
+      background:#0d0d1a;
+      display:flex;flex-direction:column;
+      align-items:center;justify-content:center;
+      color:white;font-family:sans-serif;
+      padding:20px;text-align:center;
+    ">
+      <div style="font-size:48px;margin-bottom:16px">⚽</div>
+      <div style="
+        font-size:22px;font-weight:bold;
+        color:#00ff88;margin-bottom:12px;
+      ">Penalty Blitz</div>
+      <div style="
+        font-size:14px;color:#aaa;
+        line-height:1.6;max-width:280px;
+      ">
+        Open this app inside Base App or Warpcast
+        to play automatically.
       </div>
-      <div class="connect-features">
-        <div class="connect-feature">
-          <span class="cf-icon">✅</span>
-          <span>Stats saved permanently to your wallet</span>
-        </div>
-        <div class="connect-feature">
-          <span class="cf-icon">✅</span>
-          <span>Appear on the global leaderboard</span>
-        </div>
-      </div>
-      <button id="connectWalletBtn"
-              onclick="triggerWalletConnect()">
-        🔗&nbsp; Connect Wallet
-      </button>
     </div>
-    <div class="powered-by">Powered by <span>⬡ Base</span></div>
   </div>
 
   <!--
