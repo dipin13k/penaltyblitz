@@ -101,16 +101,20 @@ function initGame() {
       loading.remove()
       if (!S.wallet) showScreen('connect')
     }
-  }, 2000)
+  }, 5000)
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
-  async function getFidFromWallet(
+  async function getIdentityFromWallet(
     walletAddress: string
-  ): Promise<number | null> {
+  ): Promise<{
+    fid: number | null
+    username: string | null
+    avatarUrl: string | null
+  }> {
     try {
       const res = await fetch(
         `https://api.neynar.com/v2/farcaster/user/bulk-by-address?addresses=${walletAddress}`,
@@ -123,13 +127,18 @@ function initGame() {
       const data = await res.json()
       const users = data[walletAddress.toLowerCase()]
       if (users && users.length > 0) {
-        console.log('Found FID:', users[0].fid)
-        return users[0].fid
+        const user = users[0]
+        console.log('Neynar found user:', user.username)
+        return {
+          fid: user.fid || null,
+          username: user.username || null,
+          avatarUrl: user.pfp_url || null
+        }
       }
     } catch (e) {
       console.log('Neynar lookup failed:', e)
     }
-    return null
+    return { fid: null, username: null, avatarUrl: null }
   }
 
   let activeIntervals: number[] = [];
@@ -198,7 +207,36 @@ function initGame() {
 
     clearAllIntervals();
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    el(`screen-${id}`)?.classList.add('active');
+
+    if (id === 'connect') {
+      // Replace connect screen with "Open in Base App" message
+      const connectMsg = `
+<div id="screen-connect" style="
+  position:fixed;inset:0;
+  background:#0d0d1a;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  color:white;font-family:sans-serif;
+  padding:20px;text-align:center;
+">
+  <div style="font-size:48px;margin-bottom:16px">⚽</div>
+  <div style="
+    font-size:22px;font-weight:bold;
+    color:#00ff88;margin-bottom:12px;
+  ">Penalty Blitz</div>
+  <div style="
+    font-size:14px;color:#aaa;
+    line-height:1.6;max-width:280px;
+  ">
+    Open this app inside Base App or Warpcast
+    to play and connect your wallet automatically.
+  </div>
+</div>`
+      document.body.insertAdjacentHTML('beforeend', connectMsg)
+    } else {
+      el(`screen-${id}`)?.classList.add('active');
+    }
+
     if (id === 'leaderboard') {
       (window as any).forceRefreshLeaderboard();
     }
@@ -252,10 +290,22 @@ function initGame() {
     S.username = identity.username
     S.avatarUrl = identity.avatarUrl
 
-    // If no FID from context, try Neynar wallet lookup
-    if (!S.fid) {
-      console.log('No FID from context, trying Neynar...')
-      S.fid = await getFidFromWallet(address)
+    // If no identity from context, try Neynar lookup
+    if (!S.fid || !S.username) {
+      console.log('Trying Neynar for full identity...')
+      const neynarIdentity = await getIdentityFromWallet(address)
+
+      // Only override if we got better data from Neynar
+      if (neynarIdentity.fid) S.fid = neynarIdentity.fid
+      if (!S.username && neynarIdentity.username)
+        S.username = neynarIdentity.username
+      if (!S.avatarUrl && neynarIdentity.avatarUrl)
+        S.avatarUrl = neynarIdentity.avatarUrl
+
+      console.log('Final identity:',
+        'fid:', S.fid,
+        'username:', S.username,
+        'avatar:', !!S.avatarUrl)
     }
 
     console.log('Identity resolved:',
