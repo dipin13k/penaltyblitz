@@ -79,10 +79,58 @@ export default function GamePage() {
 }
 
 function initGame() {
+  const loadingHTML = `
+<div id="screen-loading" style="
+  position:fixed;inset:0;
+  background:#0d0d1a;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  color:white;font-family:sans-serif;
+  z-index:9999;
+">
+  <div style="font-size:48px;margin-bottom:16px">⚽</div>
+  <div style="font-size:18px;color:#00ff88">
+    Loading Penalty Blitz...
+  </div>
+</div>`
+  document.body.insertAdjacentHTML('beforeend', loadingHTML)
+
+  setTimeout(() => {
+    const loading = document.getElementById('screen-loading')
+    if (loading) {
+      loading.remove()
+      if (!S.wallet) showScreen('connect')
+    }
+  }, 2000)
+
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
+
+  async function getFidFromWallet(
+    walletAddress: string
+  ): Promise<number | null> {
+    try {
+      const res = await fetch(
+        `https://api.neynar.com/v2/farcaster/user/bulk-by-address?addresses=${walletAddress}`,
+        {
+          headers: {
+            'api_key': process.env.NEXT_PUBLIC_NEYNAR_API_KEY || ''
+          }
+        }
+      )
+      const data = await res.json()
+      const users = data[walletAddress.toLowerCase()]
+      if (users && users.length > 0) {
+        console.log('Found FID:', users[0].fid)
+        return users[0].fid
+      }
+    } catch (e) {
+      console.log('Neynar lookup failed:', e)
+    }
+    return null
+  }
 
   let activeIntervals: number[] = [];
   function safeSetInterval(fn: Function, ms: number) {
@@ -189,54 +237,107 @@ function initGame() {
   ; (window as any).__onWalletStateChange = async (
     address: string | null
   ) => {
+    const loadingEl = document.getElementById('screen-loading')
+    if (loadingEl) loadingEl.remove()
+
     S.wallet = address
     if (!address) {
       showScreen('connect')
       return
     }
 
-    // Get Farcaster identity automatically
+    // Get Farcaster identity from SDK context first
     const identity = await getFarcasterIdentity()
     S.fid = identity.fid
     S.username = identity.username
     S.avatarUrl = identity.avatarUrl
 
-    // Check if player exists in Supabase
-    const { data } = await supabase
-      .from('player_profiles')
-      .select('fid, username, avatar_url')
-      .eq('wallet_address', address)
-      .maybeSingle()
+    // If no FID from context, try Neynar wallet lookup
+    if (!S.fid) {
+      console.log('No FID from context, trying Neynar...')
+      S.fid = await getFidFromWallet(address)
+    }
 
-    if (data) {
-      // Returning player — update identity if changed
-      if (identity.fid || identity.username) {
-        await supabase
-          .from('player_profiles')
-          .update({
-            fid: identity.fid || data.fid,
-            username: identity.username || data.username,
-            avatar_url: identity.avatarUrl || data.avatar_url
-          })
-          .eq('wallet_address', address)
+    console.log('Identity resolved:',
+      'fid:', S.fid,
+      'username:', S.username,
+      'wallet:', address)
+
+    // Look up player by FID first, then wallet fallbacks
+    let existingPlayer = null
+
+    if (S.fid) {
+      const { data: fidData } = await supabase
+        .from('player_profiles')
+        .select('*')
+        .eq('fid', S.fid)
+        .maybeSingle()
+      existingPlayer = fidData
+    }
+
+    if (!existingPlayer) {
+      const { data: w1Data } = await supabase
+        .from('player_profiles')
+        .select('*')
+        .eq('wallet_address', address)
+        .maybeSingle()
+      existingPlayer = w1Data
+    }
+
+    if (!existingPlayer) {
+      const { data: w2Data } = await supabase
+        .from('player_profiles')
+        .select('*')
+        .eq('wallet_address_2', address)
+        .maybeSingle()
+      existingPlayer = w2Data
+    }
+
+    if (existingPlayer) {
+      // Returning player — update identity and
+      // store current wallet in correct slot
+      const updateData: any = {
+        fid: S.fid || existingPlayer.fid,
+        username: S.username || existingPlayer.username,
+        avatar_url: S.avatarUrl || existingPlayer.avatar_url,
       }
+
+      // Store wallet in correct slot without overwriting
+      if (existingPlayer.wallet_address === address) {
+        // Already in slot 1, no change needed
+      } else if (existingPlayer.wallet_address_2 === address) {
+        // Already in slot 2, no change needed
+      } else if (!existingPlayer.wallet_address) {
+        updateData.wallet_address = address
+      } else if (!existingPlayer.wallet_address_2) {
+        updateData.wallet_address_2 = address
+      }
+      // If both slots full, keep existing (don't overwrite)
+
+      await supabase
+        .from('player_profiles')
+        .update(updateData)
+        .eq('id', existingPlayer.id)
+
       showScreen('menu')
       loadMenuStats()
     } else {
       // New player — create profile automatically
-      // No username input screen needed
       const { error } = await supabase
         .from('player_profiles')
         .insert({
           wallet_address: address,
-          fid: identity.fid,
-          username: identity.username ||
+          fid: S.fid,
+          username: S.username ||
             address.slice(0, 6) + '...' + address.slice(-4),
-          avatar_url: identity.avatarUrl
+          avatar_url: S.avatarUrl
         })
+
       if (!error) {
         showScreen('menu')
         loadMenuStats()
+      } else {
+        console.error('Insert error:', error)
       }
     }
   }
