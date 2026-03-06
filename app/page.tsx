@@ -17,7 +17,6 @@ export default function GamePage() {
   useEffect(() => { setFrameReady(); }, [setFrameReady]);
 
   useEffect(() => {
-    console.log('=== wallet useEffect fired ===', 'isConnected:', isConnected, 'address:', address)
     const timer = setTimeout(() => {
       const addr = isConnected ? (address ?? null) : null
       if ((window as any).__onWalletStateChange) {
@@ -40,7 +39,6 @@ export default function GamePage() {
       try {
         await sdk.actions.ready()
         const ctx = await sdk.context
-        console.log('SDK context user:', ctx?.user?.username)
         ;(window as any).__miniAppContext = ctx
       } catch (e) {
         console.log('SDK context failed:', e)
@@ -136,11 +134,10 @@ function initGame() {
 
   function el(id: string) { return document.getElementById(id); }
 
+  // Only show username in topbar, no wallet address
   function updateTopbar() {
     const u = document.getElementById('topbarUsername')
-    const a = document.getElementById('topbarAddress')
-    if (u) u.innerText = S.username || (S.wallet ? S.wallet.slice(0,6)+'...'+S.wallet.slice(-4) : '')
-    if (a && S.wallet) a.innerText = S.wallet.slice(0,6)+'...'+S.wallet.slice(-4)
+    if (u) u.innerText = S.username || ''
   }
 
   function showScreen(id: string) {
@@ -148,14 +145,13 @@ function initGame() {
     if (ep) ep.remove()
     clearAllIntervals();
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    // FIX: always activate the target screen (was incorrectly skipping 'connect')
     el(`screen-${id}`)?.classList.add('active');
     if (id === 'leaderboard') (window as any).forceRefreshLeaderboard();
     const nav = document.getElementById('bottomNav');
     if (nav) nav.style.display = ['menu','leaderboard','profile'].includes(id) ? 'flex' : 'none';
-    if (id === 'menu' && S.wallet) {
+    if (id === 'menu') {
       updateTopbar();
-      setTimeout(() => showOnboardingIfNeeded(), 300);
+      if (S.wallet) setTimeout(() => showOnboardingIfNeeded(), 300);
     }
   }
   ;(window as any).showScreen = showScreen;
@@ -172,6 +168,7 @@ function initGame() {
 
   ;(window as any).__onWalletStateChange = async (address: string | null) => {
     S.wallet = address
+    // If no wallet, show connect screen (rare edge case in miniapp)
     if (!address) { showScreen('connect'); return }
 
     const identity = await getFarcasterIdentity()
@@ -186,7 +183,7 @@ function initGame() {
       if (!S.avatarUrl && ni.avatarUrl) S.avatarUrl = ni.avatarUrl
     }
 
-    console.log('Identity resolved — fid:', S.fid, 'username:', S.username, 'wallet:', address)
+    console.log('Identity resolved — fid:', S.fid, 'username:', S.username)
 
     let existingPlayer: any = null
     if (S.fid) {
@@ -216,7 +213,8 @@ function initGame() {
         else if (!existingPlayer.wallet_address_2) updateData.wallet_address_2 = address
       }
       await supabase.from('player_profiles').update(updateData).eq('id', existingPlayer.id)
-      showScreen('menu')
+      // Update topbar in place — no screen switch needed (already on menu)
+      updateTopbar()
       loadMenuStats()
     } else {
       S.primaryWallet = address
@@ -226,7 +224,7 @@ function initGame() {
         username: S.username || address.slice(0,6)+'...'+address.slice(-4),
         avatar_url: S.avatarUrl
       })
-      if (!error) { showScreen('menu'); loadMenuStats() }
+      if (!error) { updateTopbar(); loadMenuStats() }
       else console.error('Insert error:', error)
     }
     console.log('primaryWallet:', S.primaryWallet)
@@ -596,7 +594,6 @@ function initGame() {
     if (cs) cs.innerText=S.matchStats.saves.toString();
     if (isWin) spawnConfetti();
     const walletForSave = S.primaryWallet || S.wallet
-    console.log('endGame — connected:', S.wallet, 'primaryWallet:', S.primaryWallet, 'saving with:', walletForSave)
     if (walletForSave) {
       saveMatchResult(isWin, walletForSave);
       cachedLeaderboardData=null; leaderboardCacheTime=0;
@@ -651,10 +648,8 @@ function initGame() {
       cont.innerHTML=`<div class="placeholder-wrap"><div class="placeholder-emoji">🤷‍♂️</div><div class="placeholder-title">NO PLAYERS YET</div></div>`;
       return;
     }
-
     let meFound: PlayerRow | null = null;
     let html='';
-
     for (let i = 0; i < data.length; i++) {
       const p = data[i];
       const rank = i + 1;
@@ -674,7 +669,6 @@ function initGame() {
   <div style="font-weight:bold;color:#00ff88;font-size:15px;">${Math.round(p.leaderboard_score)}</div>
 </div>`;
     }
-
     cont.innerHTML=html;
     if (S.wallet) {
       myRank.style.display='flex';
@@ -750,8 +744,7 @@ function initGame() {
       <div style="width:80px;height:80px;border-radius:50%;overflow:hidden;border:3px solid #00ff88;background:#333;flex-shrink:0;margin-bottom:12px;">
         ${S.avatarUrl?`<img src="${S.avatarUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;"/>`:`<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:32px">👤</div>`}
       </div>
-      <div style="font-size:20px;font-weight:bold;color:#00ff88;margin-bottom:4px;">${data?.username||S.username||'Anonymous'}</div>
-      <div style="font-size:12px;color:#666;margin-bottom:24px;">${S.wallet?S.wallet.slice(0,6)+'...'+S.wallet.slice(-4):''}</div>
+      <div style="font-size:20px;font-weight:bold;color:#00ff88;margin-bottom:20px;">${data?.username||S.username||'Anonymous'}</div>
       <div style="background:#1e1e3a;border:1px solid #00ff88;border-radius:12px;padding:8px 24px;font-size:14px;color:#00ff88;margin-bottom:24px;">🏆 Rank #${rank}</div>
       <div style="width:100%;max-width:320px;display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         ${([['Matches',data?.total_matches||0,'🎮'],['Wins',data?.total_wins||0,'✅'],['Losses',data?.total_losses||0,'❌'],['Win Rate',(data?.win_rate||0)+'%','📊'],['Goals',data?.total_goals_scored||0,'⚽'],['Score',data?.leaderboard_score||0,'⭐']] as [string,string|number,string][]).map(([l,v,ic])=>`
@@ -775,8 +768,8 @@ function initGame() {
   }
 
   document.body.insertAdjacentHTML('beforeend',`
-  <div id="bottomNav" style="position:fixed;bottom:0;left:0;right:0;height:64px;background:#1a1a2e;border-top:1px solid #333;display:none;align-items:center;justify-content:space-around;z-index:1000;">
-    <button onclick="switchTab('play')" id="tab-play" style="flex:1;height:64px;background:none;border:none;color:#888;font-size:11px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:44px;"><span style="font-size:20px">⚽</span><span>Play</span></button>
+  <div id="bottomNav" style="position:fixed;bottom:0;left:0;right:0;height:64px;background:#1a1a2e;border-top:1px solid #333;display:flex;align-items:center;justify-content:space-around;z-index:1000;">
+    <button onclick="switchTab('play')" id="tab-play" style="flex:1;height:64px;background:none;border:none;color:#00ff88;font-size:11px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:44px;"><span style="font-size:20px">⚽</span><span>Play</span></button>
     <button onclick="switchTab('leaderboard')" id="tab-leaderboard" style="flex:1;height:64px;background:none;border:none;color:#888;font-size:11px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:44px;"><span style="font-size:20px">🏆</span><span>Leaderboard</span></button>
     <button onclick="switchTab('profile')" id="tab-profile" style="flex:1;height:64px;background:none;border:none;color:#888;font-size:11px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:44px;"><span style="font-size:20px">👤</span><span>Profile</span></button>
   </div>`)
