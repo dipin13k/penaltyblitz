@@ -2,41 +2,28 @@ export function getGameHTML() {
   return `
 <div id="app">
 
-  <!--
-  ════════════════════════════════
-  SCREEN 1: WALLET CONNECT
-  First screen. Cannot be skipped.
-  ════════════════════════════════
-  -->
-  <div id="screen-connect" class="screen">
+  <!-- SCREEN 1: LOADING / WALLET CONNECT (shown by default until wallet connects) -->
+  <div id="screen-connect" class="screen active">
     <div style="
-      position:fixed;inset:0;
+      position:absolute;inset:0;
       background:#0d0d1a;
       display:flex;flex-direction:column;
       align-items:center;justify-content:center;
       color:white;font-family:sans-serif;
       padding:20px;text-align:center;
     ">
-      <div style="font-size:48px;margin-bottom:16px">⚽</div>
+      <div style="font-size:64px;margin-bottom:20px">⚽</div>
       <div style="
-        font-size:22px;font-weight:bold;
+        font-size:28px;font-weight:bold;
         color:#00ff88;margin-bottom:12px;
-      ">Penalty Blitz</div>
-      <div style="
-        font-size:14px;color:#aaa;
-        line-height:1.6;max-width:280px;
-      ">
-      </div>
+        letter-spacing:4px;
+      ">PENALTY BLITZ</div>
+      <div style="font-size:14px;color:#555;letter-spacing:2px;margin-bottom:32px;">Connecting wallet...</div>
+      <div class="spinner" style="width:32px;height:32px;border-width:3px;"></div>
     </div>
   </div>
 
-  <!--
-  ════════════════════════════════
-  SCREEN 2: USERNAME SETUP
-  Shown once per wallet ever.
-  After submitting never shown again.
-  ════════════════════════════════
-  -->
+  <!-- SCREEN 2: USERNAME SETUP -->
   <div id="screen-username" class="screen">
     <div class="username-header">
       <div class="username-title">Welcome to Penalty Blitz!</div>
@@ -58,137 +45,94 @@ export function getGameHTML() {
       />
       <div class="char-counter" id="charCounter">0 / 16</div>
       <div class="username-rules">
-        • 3 to 16 characters<br>
-        • Letters, numbers, underscores only<br>
-        • This name shows on the leaderboard<br>
-        • Cannot be changed later
+        \u2022 3 to 16 characters<br>
+        \u2022 Letters, numbers, underscores only<br>
+        \u2022 This name shows on the leaderboard<br>
+        \u2022 Cannot be changed later
       </div>
     </div>
     <div id="usernameError" class="username-error"></div>
-    <button id="confirmUsernameBtn"
-            onclick="confirmUsername()">
-      LET'S PLAY →
+    <button id="confirmUsernameBtn" onclick="confirmUsername()">
+      LET'S PLAY \u2192
     </button>
   </div>
 
-  <!--
-  ════════════════════════════════
-  SCREEN 3: MAIN MENU
-  Shown after wallet + username.
-  Two options: Play or Leaderboard.
-  ════════════════════════════════
-  -->
+  <!-- SCREEN 3: MAIN MENU -->
   <div id="screen-menu" class="screen">
-    <!-- Top bar with wallet info -->
     <div class="menu-topbar">
       <div class="menu-topbar-left">
         <div class="topbar-dot"></div>
         <span class="topbar-username" id="topbarUsername"></span>
         <span class="topbar-address" id="topbarAddress"></span>
       </div>
-      <button class="topbar-disconnect"
-              onclick="handleDisconnect()">✕</button>
+      <button class="topbar-disconnect" onclick="handleDisconnect()">\u2715</button>
     </div>
-
-    <!-- Floating particles injected by JS -->
-
-    <!-- Logo -->
     <div class="menu-logo">
       <h1>PENALTY<br><span>BLITZ</span></h1>
       <p>Score. Save. Dominate.</p>
     </div>
-
-    <!-- Quick stats (hidden until data loads) -->
-    <div id="menuStatsRow" class="menu-stats-row"
-         style="display:none">
-    </div>
-
-    <!-- Main buttons -->
+    <div id="menuStatsRow" class="menu-stats-row" style="display:none"></div>
     <div class="menu-btns">
-      <button class="btn btn-primary"
-              id="playBtn"
-              onclick="showScreen('difficulty')">
-        ▶&nbsp; PLAY
+      <button class="btn btn-primary" id="playBtn" onclick="showScreen('difficulty')">
+        \u25b6&nbsp; PLAY
       </button>
-      <button class="btn btn-secondary"
-              onclick="showScreen('leaderboard')">
-        🏆&nbsp; LEADERBOARD
+      <button class="btn btn-secondary" onclick="showScreen('leaderboard')">
+        \ud83c\udfc6&nbsp; LEADERBOARD
       </button>
     </div>
-
-    <div class="powered-by">Powered by <span>⬡ Base</span></div>
+    <div class="powered-by">Powered by <span>\u2b21 Base</span></div>
   </div>
 
-  <!--
-  ════════════════════════════════
-  SCREEN 4: DIFFICULTY SELECT
-  ════════════════════════════════
-  -->
+  <!-- SCREEN 4: DIFFICULTY SELECT -->
   <div id="screen-difficulty" class="screen">
-    <button class="back-btn" onclick="showScreen('menu')">
-      ← Back
-    </button>
+    <button class="back-btn" onclick="showScreen('menu')">\u2190 Back</button>
     <div class="diff-title">SELECT DIFFICULTY</div>
     <div class="diff-cards">
-      <div class="diff-card easy"
-           onclick="startGame('easy')">
-        <div class="diff-emoji">😊</div>
+      <div class="diff-card easy" onclick="startGame('easy')">
+        <div class="diff-emoji">\ud83d\ude0a</div>
         <div class="diff-info">
           <h3>AMATEUR</h3>
-          <p>Relaxed keeper &nbsp;•&nbsp; Slow arrow</p>
+          <p>Relaxed keeper &nbsp;\u2022&nbsp; Slow arrow</p>
         </div>
         <div class="diff-accent"></div>
       </div>
-      <div class="diff-card medium"
-           onclick="startGame('medium')">
-        <div class="diff-badge">★ BEST</div>
-        <div class="diff-emoji">😤</div>
+      <div class="diff-card medium" onclick="startGame('medium')">
+        <div class="diff-badge">\u2605 BEST</div>
+        <div class="diff-emoji">\ud83d\ude24</div>
         <div class="diff-info">
           <h3>SEMI-PRO</h3>
-          <p>Decent keeper &nbsp;•&nbsp; Medium arrow</p>
+          <p>Decent keeper &nbsp;\u2022&nbsp; Medium arrow</p>
         </div>
         <div class="diff-accent"></div>
       </div>
-      <div class="diff-card hard"
-           onclick="startGame('hard')">
-        <div class="diff-emoji">😈</div>
+      <div class="diff-card hard" onclick="startGame('hard')">
+        <div class="diff-emoji">\ud83d\ude08</div>
         <div class="diff-info">
           <h3>WORLD CLASS</h3>
-          <p>Sharp keeper &nbsp;•&nbsp; Fast arrow</p>
+          <p>Sharp keeper &nbsp;\u2022&nbsp; Fast arrow</p>
         </div>
         <div class="diff-accent"></div>
       </div>
     </div>
   </div>
 
-  <!--
-  ════════════════════════════════
-  SCREEN 5: GAME SCREEN
-  DO NOT CHANGE ANYTHING HERE
-  ════════════════════════════════
-  -->
+  <!-- SCREEN 5: GAME SCREEN -->
   <div id="screen-game" class="screen">
-
-    <!-- Score Bar -->
     <div id="scoreBar">
       <div class="score-side">
         <div class="score-dot player-dot"></div>
         <div class="score-label">YOU</div>
         <div class="score-num" id="playerScoreEl">0</div>
       </div>
-      <div id="turnIndicator">YOUR TURN ⚽</div>
+      <div id="turnIndicator">YOUR TURN \u26bd</div>
       <div class="score-side">
         <div class="score-num" id="aiScoreEl">0</div>
         <div class="score-label">AI</div>
         <div class="score-dot ai-dot"></div>
       </div>
     </div>
-
-    <!-- Crowds -->
     <div id="crowdLeft" class="crowd-strip left"></div>
     <div id="crowdRight" class="crowd-strip right"></div>
-
-    <!-- Goal -->
     <div id="goal-container">
       <div id="goal">
         <div id="post-left"></div>
@@ -197,9 +141,7 @@ export function getGameHTML() {
         <div id="net">
           <div id="net-ripple"></div>
           <div id="aimCursor"></div>
-          <div id="swingArrow">➤</div>
-          
-          <!-- Keeper: placed INSIDE net -->
+          <div id="swingArrow">\u27a4</div>
           <div id="keeper">
             <div id="keeper-sway-wrapper">
               <div id="keeper-dive-wrapper">
@@ -233,8 +175,6 @@ export function getGameHTML() {
             </div>
           </div>
         </div>
-
-        <!-- AI Footballer -->
         <div id="ai-player" style="display:none">
           <div class="a-head">
             <div class="a-eye-l"></div>
@@ -253,17 +193,11 @@ export function getGameHTML() {
         </div>
       </div>
     </div>
-
-    <!-- Ball -->
-    <div id="ball">⚽</div>
-
-    <!-- Pitch -->
+    <div id="ball">\u26bd</div>
     <div id="pitch">
       <div id="penalty-arc"></div>
       <div id="penalty-spot"></div>
     </div>
-
-    <!-- Power Bar -->
     <div id="powerBarWrap">
       <div class="bar-label">POWER</div>
       <div id="powerBarOuter">
@@ -277,25 +211,13 @@ export function getGameHTML() {
       </div>
       <div class="bar-label tap-label">TAP</div>
     </div>
-
-    <!-- Shoot Button -->
     <button id="shootBtn" onclick="handleShoot()">
-      <span>⚽</span>
+      <span>\u26bd</span>
       <span>SHOOT</span>
     </button>
-
-    <!-- THREE Dive Buttons — covers all 3 arrow zones -->
-    <button id="diveLeft" onclick="handleDive('left')">
-      ← LEFT
-    </button>
-    <button id="diveCenter" onclick="handleDive('center')">
-      ↑ CENTER
-    </button>
-    <button id="diveRight" onclick="handleDive('right')">
-      RIGHT →
-    </button>
-
-    <!-- Game Overlays -->
+    <button id="diveLeft" onclick="handleDive('left')">\u2190 LEFT</button>
+    <button id="diveCenter" onclick="handleDive('center')">\u2191 CENTER</button>
+    <button id="diveRight" onclick="handleDive('right')">RIGHT \u2192</button>
     <div id="roundPopup">
       <div class="popup-card">
         <h2 id="roundText">ROUND 1</h2>
@@ -309,65 +231,44 @@ export function getGameHTML() {
       <h3 id="betweenText"></h3>
     </div>
     <div id="suddenDeathOverlay">
-      <h2>⚡ SUDDEN DEATH ⚡</h2>
+      <h2>\u26a1 SUDDEN DEATH \u26a1</h2>
     </div>
   </div>
 
-  <!--
-  ════════════════════════════════
-  SCREEN 6: RESULTS SCREEN
-  ════════════════════════════════
-  -->
+  <!-- SCREEN 6: RESULTS -->
   <div id="screen-results" class="screen">
     <div class="results-card">
-      <div id="resultEmoji" class="result-emoji">🏆</div>
+      <div id="resultEmoji" class="result-emoji">\ud83c\udfc6</div>
       <div id="resultTitle" class="result-title">VICTORY!</div>
-      <div id="resultScore" class="result-score">0 — 0</div>
+      <div id="resultScore" class="result-score">0 \u2014 0</div>
       <div class="score-labels-row">
         <span>YOU</span><span>AI</span>
       </div>
       <div class="stats-row">
         <div class="stat-box">
-          <div id="statGoals" class="stat-num"
-               style="color:#00d4ff">0</div>
+          <div id="statGoals" class="stat-num" style="color:#00d4ff">0</div>
           <div class="stat-lbl">GOALS</div>
         </div>
         <div class="stat-box">
-          <div id="statSaves" class="stat-num"
-               style="color:#00ff88">0</div>
+          <div id="statSaves" class="stat-num" style="color:#00ff88">0</div>
           <div class="stat-lbl">SAVES</div>
         </div>
       </div>
       <div class="results-btns" id="resultsBtns">
-        <button class="btn btn-primary"
-                onclick="onPlayAgain()">
-          ▶ PLAY AGAIN
-        </button>
-        <button class="btn btn-secondary"
-                onclick="onMainMenu()">
-          MAIN MENU
-        </button>
-        <!-- Mint trophy button injected here by JS on WIN -->
+        <button class="btn btn-primary" onclick="onPlayAgain()">\u25b6 PLAY AGAIN</button>
+        <button class="btn btn-secondary" onclick="onMainMenu()">MAIN MENU</button>
       </div>
     </div>
   </div>
 
-  <!--
-  ════════════════════════════════
-  SCREEN 7: LEADERBOARD
-  Shows usernames, player rank pinned at bottom
-  ════════════════════════════════
-  -->
+  <!-- SCREEN 7: LEADERBOARD -->
   <div id="screen-leaderboard" class="screen">
     <div class="data-topbar">
-      <button class="back-btn-inline"
-              onclick="showScreen('menu')">← Back</button>
+      <button class="back-btn-inline" onclick="showScreen('menu')">\u2190 Back</button>
       <div class="data-title">LEADERBOARD</div>
-      <button class="refresh-btn"
-              onclick="forceRefreshLeaderboard()">↻</button>
+      <button class="refresh-btn" onclick="forceRefreshLeaderboard()">\u21bb</button>
     </div>
     <div id="leaderboardContent" class="lb-content"></div>
-    <!-- Player rank always pinned at bottom -->
     <div id="myRankBar" class="my-rank-bar"></div>
   </div>
 
