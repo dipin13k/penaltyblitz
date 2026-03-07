@@ -134,7 +134,6 @@ function initGame() {
 
   function el(id: string) { return document.getElementById(id); }
 
-  // Update profile tab icon with user's avatar
   function updateProfileTabIcon() {
     const btn = document.getElementById('tab-profile');
     if (!btn) return;
@@ -171,6 +170,51 @@ function initGame() {
     }
     return { fid: null, username: null, avatarUrl: null }
   }
+
+  // Request notification permission (add frame)
+  async function requestNotificationPermission() {
+    try {
+      const result = await sdk.actions.addFrame();
+      if (result?.notificationDetails) {
+        // Save token via webhook
+        if (S.fid) {
+          await fetch('/api/webhook', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              event: 'frame_added',
+              fid: S.fid,
+              notificationDetails: result.notificationDetails,
+            }),
+          });
+        }
+        showToast('\uD83D\uDD14 Notifications enabled!');
+      }
+    } catch (e) {
+      console.log('addFrame failed:', e);
+    }
+  }
+
+  function showToast(msg: string) {
+    const existing = document.getElementById('pb-toast');
+    if (existing) existing.remove();
+    const toast = document.createElement('div');
+    toast.id = 'pb-toast';
+    toast.innerText = msg;
+    toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#00ff88;color:#000;padding:10px 20px;border-radius:20px;font-weight:bold;font-size:14px;z-index:9999;pointer-events:none;';
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 2500);
+  }
+
+  // Share result on Farcaster
+  function shareResultOnFarcaster(pScore: number, aScore: number, isWin: boolean, isDraw: boolean) {
+    const emoji = isWin ? '\uD83C\uDFC6' : isDraw ? '\uD83E\uDD1D' : '\uD83D\uDC80';
+    const result = isWin ? 'won' : isDraw ? 'drew' : 'lost';
+    const text = `${emoji} I just ${result} ${pScore}-${aScore} in Penalty Blitz! ⚽\nCan you beat my score? Come challenge me!`;
+    const url = `https://warpcast.com/~/compose?text=${encodeURIComponent(text)}&embeds[]=${encodeURIComponent('https://penaltyblitz.vercel.app')}`;
+    sdk.actions.openUrl(url);
+  }
+  ;(window as any).shareResultOnFarcaster = shareResultOnFarcaster;
 
   ;(window as any).__onWalletStateChange = async (address: string | null) => {
     S.wallet = address
@@ -232,6 +276,9 @@ function initGame() {
       else console.error('Insert error:', error)
     }
     console.log('primaryWallet:', S.primaryWallet)
+
+    // Ask for notification permission after login (with small delay)
+    setTimeout(() => requestNotificationPermission(), 2000);
   }
 
   const pending = (window as any).__pendingWalletAddr
@@ -587,8 +634,8 @@ function initGame() {
 
   function endGame() {
     S.gameOver=true;
-    showScreen('results');
     const isWin=S.pScore>S.aScore; const isDraw=S.pScore===S.aScore;
+    showScreen('results');
     const t=el('resultTitle'); const e=el('resultEmoji'); const s=el('resultScore');
     const cg=el('statGoals'); const cs=el('statSaves');
     if (t) t.innerText=isWin?'VICTORY!':(isDraw?'DRAW':'DEFEAT');
@@ -597,10 +644,37 @@ function initGame() {
     if (cg) cg.innerText=S.matchStats.goals.toString();
     if (cs) cs.innerText=S.matchStats.saves.toString();
     if (isWin) spawnConfetti();
+
+    // Inject Share button into results screen
+    const resultsScreen = el('screen-results');
+    if (resultsScreen && !el('shareBtn')) {
+      const shareBtn = document.createElement('button');
+      shareBtn.id = 'shareBtn';
+      shareBtn.innerHTML = '\uD83D\uDCE4 Share on Farcaster';
+      shareBtn.style.cssText = 'margin-top:12px;background:linear-gradient(135deg,#8b5cf6,#6d28d9);color:white;border:none;border-radius:14px;padding:14px 28px;font-size:16px;font-weight:bold;cursor:pointer;width:80%;max-width:280px;';
+      shareBtn.onclick = () => shareResultOnFarcaster(S.pScore, S.aScore, isWin, isDraw);
+      // Insert after the existing buttons
+      const existingBtns = resultsScreen.querySelector('.results-buttons') || resultsScreen;
+      existingBtns.appendChild(shareBtn);
+    }
+
     const walletForSave = S.primaryWallet || S.wallet
     if (walletForSave) {
       saveMatchResult(isWin, walletForSave);
       cachedLeaderboardData=null; leaderboardCacheTime=0;
+    }
+
+    // Send notification to come back tomorrow (after win)
+    if (isWin && S.fid) {
+      setTimeout(async () => {
+        try {
+          await fetch('/api/notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fid: S.fid, type: 'win' }),
+          });
+        } catch(e) { console.log('notify failed', e); }
+      }, 3000);
     }
   }
 
@@ -732,7 +806,6 @@ function initGame() {
   }
 
   async function showProfileScreen() {
-    // Hide all screens so menu topbar doesn't bleed through
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     const nav = document.getElementById('bottomNav');
     if (nav) nav.style.display = 'flex';

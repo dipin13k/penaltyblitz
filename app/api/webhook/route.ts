@@ -1,0 +1,71 @@
+import { NextRequest, NextResponse } from 'next/server';
+
+const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY || process.env.NEXT_PUBLIC_NEYNAR_API_KEY || '';
+
+// Store notification tokens (in production use a DB — here we use Supabase via API)
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const { event, notificationDetails, fid } = body;
+
+    // User added the frame — save their notification token
+    if (event === 'frame_added' && notificationDetails) {
+      const { url, token } = notificationDetails;
+      if (fid && token && url) {
+        await supabase
+          .from('player_profiles')
+          .update({ notification_token: token, notification_url: url })
+          .eq('fid', fid);
+      }
+      return NextResponse.json({ success: true });
+    }
+
+    // User removed the frame — clear token
+    if (event === 'frame_removed' && fid) {
+      await supabase
+        .from('player_profiles')
+        .update({ notification_token: null, notification_url: null })
+        .eq('fid', fid);
+      return NextResponse.json({ success: true });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (e) {
+    console.error('Webhook error:', e);
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 });
+  }
+}
+
+// Send notification helper — call this after a match
+export async function sendNotification(fid: number, title: string, body: string) {
+  try {
+    const { data } = await supabase
+      .from('player_profiles')
+      .select('notification_token, notification_url')
+      .eq('fid', fid)
+      .maybeSingle();
+
+    if (!data?.notification_token || !data?.notification_url) return;
+
+    await fetch(data.notification_url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        notificationId: `pb-${fid}-${Date.now()}`,
+        title,
+        body,
+        targetUrl: 'https://penaltyblitz.vercel.app',
+        tokens: [data.notification_token],
+      }),
+    });
+  } catch (e) {
+    console.error('sendNotification error:', e);
+  }
+}
