@@ -3,11 +3,6 @@ const ROOT_URL =
   (process.env.VERCEL_URL && `https://${process.env.VERCEL_URL}`) ||
   "http://localhost:3000";
 
-/**
- * MiniApp configuration object. Must follow the mini app manifest specification.
- *
- * @see {@link https://docs.base.org/mini-apps/features/manifest}
- */
 export const minikitConfig = {
   accountAssociation: {
     header: "eyJmaWQiOjEwNDE1NDEsInR5cGUiOiJhdXRoIiwia2V5IjoiMHgwRTc0OUYzQWY0YUU3OTlGQjg3OUFCMUYzQ0Q3MzFlRjZBRjNjRDAwIn0",
@@ -20,20 +15,24 @@ export const minikitConfig = {
   miniapp: {
     version: "1",
     name: "Penalty Blitz",
-    subtitle: "Penalty Kick Game",
-    description: "A penalty shootout game onchain on Base",
-    screenshotUrls: [],
+    subtitle: "Penalty kick game on Base",
+    description: "Step up to the spot and take your shot. Penalty Blitz is a fast-paced penalty shootout game on Base — aim, shoot, save, and climb the global leaderboard.",
+    screenshotUrls: [
+      `${ROOT_URL}/screenshot1.png`,
+      `${ROOT_URL}/screenshot2.png`,
+      `${ROOT_URL}/screenshot3.png`,
+    ],
     iconUrl: `${ROOT_URL}/icon.png`,
     splashImageUrl: `${ROOT_URL}/splash.png`,
     splashBackgroundColor: "#1a1a2e",
     homeUrl: ROOT_URL,
     webhookUrl: `${ROOT_URL}/api/webhook`,
     primaryCategory: "games",
-    tags: ["game", "arcade", "sports"],
+    tags: ["game", "arcade", "sports", "onchain"],
     heroImageUrl: `${ROOT_URL}/hero.png`,
     tagline: "Score. Save. Dominate.",
-    ogTitle: "Penalty Blitz",
-    ogDescription: "A penalty kick game onchain on Base",
+    ogTitle: "Penalty Blitz — Penalty Kick Game on Base",
+    ogDescription: "Step up to the spot. Aim, shoot, save — climb the global leaderboard on Base.",
     ogImageUrl: `${ROOT_URL}/hero.png`,
   },
 } as const;
