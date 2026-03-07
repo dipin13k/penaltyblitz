@@ -28,7 +28,7 @@ export const minikitConfig = {
     homeUrl: ROOT_URL,
     webhookUrl: `${ROOT_URL}/api/webhook`,
     primaryCategory: "games",
-    tags: ["game", "arcade", "sports", "onchain"],
+    tags: ["game", "arcade", "sports", "soccer"],
     heroImageUrl: `${ROOT_URL}/hero.png`,
     tagline: "Score. Save. Dominate.",
     ogTitle: "Penalty Blitz — Penalty Kick Game",
