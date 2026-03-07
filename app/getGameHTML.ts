@@ -171,6 +171,7 @@ export function getGameHTML() {
       <div class="results-btns" id="resultsBtns">
         <button class="btn btn-primary" onclick="onPlayAgain()">&#x25B6; PLAY AGAIN</button>
         <button class="btn btn-secondary" onclick="onMainMenu()">MAIN MENU</button>
+        <button id="shareBtn" onclick="handleShareResult()" style="width:100%;height:56px;border-radius:14px;background:linear-gradient(135deg,#8b5cf6,#6d28d9);color:white;border:none;font-family:'Rajdhani',sans-serif;font-size:18px;font-weight:700;cursor:pointer;letter-spacing:1px;margin-top:2px;">&#x1F4E4; Share on Farcaster</button>
       </div>
     </div>
   </div>
@@ -187,4 +188,4 @@ export function getGameHTML() {
   </div>
 
 </div>
-` }
+`}
