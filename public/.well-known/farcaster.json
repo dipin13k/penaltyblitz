@@ -8,18 +8,24 @@
     "splashImageUrl": "https://penaltyblitz.vercel.app/splash.png",
     "splashBackgroundColor": "#101C3F",
     "webhookUrl": "https://penaltyblitz.vercel.app/api/webhook",
-    "subtitle": "Penalty kick game on Base",
-    "description": "Compete in penalty shootouts, save stats onchain, and climb the global leaderboard",
+    "subtitle": "Fast-paced penalty kick game",
+    "description": "Step up to the spot and take your shot. Penalty Blitz is a fast-paced penalty shootout game — aim, shoot, save, and climb the global leaderboard.",
     "primaryCategory": "games",
     "screenshotUrls": [
-      "https://penaltyblitz.vercel.app/screenshot1.png"
+      "https://penaltyblitz.vercel.app/screenshot1.jpg",
+      "https://penaltyblitz.vercel.app/screenshot2.jpg",
+      "https://penaltyblitz.vercel.app/screenshot3.jpg"
     ],
-    "tagline": "Score. Save. Dominate",
+    "tagline": "Score. Save. Dominate.",
     "tags": [
-      "fun",
-      "games",
-      "football"
+      "game",
+      "arcade",
+      "sports",
+      "soccer"
     ],
-    "heroImageUrl": "https://penaltyblitz.vercel.app/hero.png"
+    "heroImageUrl": "https://penaltyblitz.vercel.app/hero.png",
+    "ogTitle": "Penalty Blitz — Penalty Kick Game",
+    "ogDescription": "Step up to the spot. Aim, shoot, save — climb the global leaderboard.",
+    "ogImageUrl": "https://penaltyblitz.vercel.app/hero.png"
   }
 }
