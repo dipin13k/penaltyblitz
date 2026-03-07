@@ -71,6 +71,20 @@ function initGame() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
+  // ── LIGHT/DARK MODE ──
+  function isLightMode() { return document.body.classList.contains('light-mode'); }
+  function applyTheme(light: boolean) {
+    if (light) document.body.classList.add('light-mode');
+    else document.body.classList.remove('light-mode');
+    localStorage.setItem('pb_theme', light ? 'light' : 'dark');
+    // update toggle button if visible
+    const btn = document.getElementById('themeToggleBtn');
+    if (btn) btn.innerText = light ? '☀️ Light' : '🌙 Dark';
+  }
+  // Apply saved theme on init
+  applyTheme(localStorage.getItem('pb_theme') === 'light');
+  ;(window as any).toggleTheme = () => applyTheme(!isLightMode());
+
   async function getIdentityFromWallet(walletAddress: string): Promise<{
     fid: number | null; username: string | null; avatarUrl: string | null;
   }> {
@@ -171,12 +185,10 @@ function initGame() {
     return { fid: null, username: null, avatarUrl: null }
   }
 
-  // Request notification permission (add frame)
   async function requestNotificationPermission() {
     try {
       const result = await sdk.actions.addFrame();
       if (result?.notificationDetails) {
-        // Save token via webhook
         if (S.fid) {
           await fetch('/api/webhook', {
             method: 'POST',
@@ -206,7 +218,6 @@ function initGame() {
     setTimeout(() => toast.remove(), 2500);
   }
 
-  // Share result on Farcaster
   function shareResultOnFarcaster(pScore: number, aScore: number, isWin: boolean, isDraw: boolean) {
     const emoji = isWin ? '\uD83C\uDFC6' : isDraw ? '\uD83E\uDD1D' : '\uD83D\uDC80';
     const result = isWin ? 'won' : isDraw ? 'drew' : 'lost';
@@ -277,7 +288,6 @@ function initGame() {
     }
     console.log('primaryWallet:', S.primaryWallet)
 
-    // Ask for notification permission after login (with small delay)
     setTimeout(() => requestNotificationPermission(), 2000);
   }
 
@@ -645,7 +655,6 @@ function initGame() {
     if (cs) cs.innerText=S.matchStats.saves.toString();
     if (isWin) spawnConfetti();
 
-    // Inject Share button into results screen
     const resultsScreen = el('screen-results');
     if (resultsScreen && !el('shareBtn')) {
       const shareBtn = document.createElement('button');
@@ -653,7 +662,6 @@ function initGame() {
       shareBtn.innerHTML = '\uD83D\uDCE4 Share on Farcaster';
       shareBtn.style.cssText = 'margin-top:12px;background:linear-gradient(135deg,#8b5cf6,#6d28d9);color:white;border:none;border-radius:14px;padding:14px 28px;font-size:16px;font-weight:bold;cursor:pointer;width:80%;max-width:280px;';
       shareBtn.onclick = () => shareResultOnFarcaster(S.pScore, S.aScore, isWin, isDraw);
-      // Insert after the existing buttons
       const existingBtns = resultsScreen.querySelector('.results-buttons') || resultsScreen;
       existingBtns.appendChild(shareBtn);
     }
@@ -664,7 +672,6 @@ function initGame() {
       cachedLeaderboardData=null; leaderboardCacheTime=0;
     }
 
-    // Send notification to come back tomorrow (after win)
     if (isWin && S.fid) {
       setTimeout(async () => {
         try {
@@ -821,19 +828,32 @@ function initGame() {
     const{count}=await supabase.from('player_profiles').select('*',{count:'exact',head:true}).gt('leaderboard_score',data?.leaderboard_score||0);
     const rank=(count||0)+1;
     const existing=document.getElementById('screen-profile');if(existing)existing.remove();
+
+    const isLight = document.body.classList.contains('light-mode');
+    const bgStyle = isLight
+      ? 'background:linear-gradient(135deg,#e8eaf6 0%,#dde3f0 100%);color:#111;'
+      : 'background:linear-gradient(135deg,#0d0d1a 0%,#1a1a2e 100%);color:white;';
+    const cardBg = isLight ? '#fff' : '#1e1e3a';
+    const cardBorder = isLight ? '#ddd' : '#333';
+    const statLbl = isLight ? '#666' : '#888';
+
     document.body.insertAdjacentHTML('beforeend',`
-    <div id="screen-profile" style="position:fixed;inset:0;background:linear-gradient(135deg,#0d0d1a 0%,#1a1a2e 100%);display:flex;flex-direction:column;align-items:center;padding:40px 20px 80px;overflow-y:auto;color:white;font-family:sans-serif;z-index:500;">
+    <div id="screen-profile" style="position:fixed;inset:0;${bgStyle}display:flex;flex-direction:column;align-items:center;padding:40px 20px 80px;overflow-y:auto;font-family:sans-serif;z-index:500;">
+      <button id="themeToggleBtn" onclick="toggleTheme();document.getElementById('screen-profile').remove();switchTab('profile');"
+        style="position:absolute;top:14px;right:14px;background:${isLight?'#e0e0e0':'#2a2a3e'};border:none;border-radius:20px;padding:7px 14px;font-size:13px;font-weight:700;cursor:pointer;color:${isLight?'#333':'#ccc'};z-index:10;">
+        ${isLight ? '☀️ Light' : '🌙 Dark'}
+      </button>
       <div style="width:80px;height:80px;border-radius:50%;overflow:hidden;border:3px solid #00ff88;background:#333;flex-shrink:0;margin-bottom:12px;">
         ${S.avatarUrl?`<img src="${S.avatarUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;"/>`:`<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:32px">\uD83D\uDC64</div>`}
       </div>
       <div style="font-size:20px;font-weight:bold;color:#00ff88;margin-bottom:20px;">${data?.username||S.username||'Anonymous'}</div>
-      <div style="background:#1e1e3a;border:1px solid #00ff88;border-radius:12px;padding:8px 24px;font-size:14px;color:#00ff88;margin-bottom:24px;">\uD83C\uDFC6 Rank #${rank}</div>
+      <div style="background:${cardBg};border:1px solid #00ff88;border-radius:12px;padding:8px 24px;font-size:14px;color:#00ff88;margin-bottom:24px;">\uD83C\uDFC6 Rank #${rank}</div>
       <div style="width:100%;max-width:320px;display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         ${([['Matches',data?.total_matches||0,'\uD83C\uDFAE'],['Wins',data?.total_wins||0,'\u2705'],['Losses',data?.total_losses||0,'\u274C'],['Win Rate',(data?.win_rate||0)+'%','\uD83D\uDCCA'],['Goals',data?.total_goals_scored||0,'\u26BD'],['Score',data?.leaderboard_score||0,'\u2B50']] as [string,string|number,string][]).map(([l,v,ic])=>`
-          <div style="background:#1e1e3a;border-radius:12px;padding:16px;text-align:center;border:1px solid #333;">
+          <div style="background:${cardBg};border-radius:12px;padding:16px;text-align:center;border:1px solid ${cardBorder};">
             <div style="font-size:20px">${ic}</div>
             <div style="font-size:22px;font-weight:bold;color:#00ff88;margin:4px 0;">${v}</div>
-            <div style="font-size:11px;color:#888">${l}</div>
+            <div style="font-size:11px;color:${statLbl}">${l}</div>
           </div>`).join('')}
       </div>
     </div>`)
