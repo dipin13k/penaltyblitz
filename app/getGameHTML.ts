@@ -16,7 +16,6 @@ export function getGameHTML() {
     <div class="menu-topbar">
       <div class="menu-topbar-left">
         <div class="topbar-dot"></div>
-        <span class="topbar-username" id="topbarUsername"></span>
       </div>
       <button class="topbar-disconnect" onclick="handleDisconnect()">&#x2715;</button>
     </div>

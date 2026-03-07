@@ -134,10 +134,17 @@ function initGame() {
 
   function el(id: string) { return document.getElementById(id); }
 
-  // Only show username in topbar, no wallet address
-  function updateTopbar() {
-    const u = document.getElementById('topbarUsername')
-    if (u) u.innerText = S.username || ''
+  // Update profile tab icon with user's avatar
+  function updateProfileTabIcon() {
+    const btn = document.getElementById('tab-profile');
+    if (!btn) return;
+    const iconSpan = btn.querySelector('.tab-icon') as HTMLElement | null;
+    if (!iconSpan) return;
+    if (S.avatarUrl) {
+      iconSpan.innerHTML = `<img src="${S.avatarUrl}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:2px solid #555;"/>`;
+    } else {
+      iconSpan.innerHTML = '\uD83D\uDC64';
+    }
   }
 
   function showScreen(id: string) {
@@ -150,7 +157,6 @@ function initGame() {
     const nav = document.getElementById('bottomNav');
     if (nav) nav.style.display = ['menu','leaderboard','profile'].includes(id) ? 'flex' : 'none';
     if (id === 'menu') {
-      updateTopbar();
       if (S.wallet) setTimeout(() => showOnboardingIfNeeded(), 300);
     }
   }
@@ -168,7 +174,6 @@ function initGame() {
 
   ;(window as any).__onWalletStateChange = async (address: string | null) => {
     S.wallet = address
-    // If no wallet, show connect screen (rare edge case in miniapp)
     if (!address) { showScreen('connect'); return }
 
     const identity = await getFarcasterIdentity()
@@ -183,7 +188,7 @@ function initGame() {
       if (!S.avatarUrl && ni.avatarUrl) S.avatarUrl = ni.avatarUrl
     }
 
-    console.log('Identity resolved — fid:', S.fid, 'username:', S.username)
+    console.log('Identity resolved \u2014 fid:', S.fid, 'username:', S.username)
 
     let existingPlayer: any = null
     if (S.fid) {
@@ -213,8 +218,7 @@ function initGame() {
         else if (!existingPlayer.wallet_address_2) updateData.wallet_address_2 = address
       }
       await supabase.from('player_profiles').update(updateData).eq('id', existingPlayer.id)
-      // Update topbar in place — no screen switch needed (already on menu)
-      updateTopbar()
+      updateProfileTabIcon()
       loadMenuStats()
     } else {
       S.primaryWallet = address
@@ -224,7 +228,7 @@ function initGame() {
         username: S.username || address.slice(0,6)+'...'+address.slice(-4),
         avatar_url: S.avatarUrl
       })
-      if (!error) { updateTopbar(); loadMenuStats() }
+      if (!error) { updateProfileTabIcon(); loadMenuStats() }
       else console.error('Insert error:', error)
     }
     console.log('primaryWallet:', S.primaryWallet)
@@ -331,7 +335,7 @@ function initGame() {
   function beginPlayerTurn() {
     S.myTurn = true; resetField();
     const ind = el('turnIndicator');
-    if (ind) { ind.innerText = 'YOUR TURN ⚽'; ind.style.color = '#00d4ff'; }
+    if (ind) { ind.innerText = 'YOUR TURN \u26bd'; ind.style.color = '#00d4ff'; }
     el('ai-player')!.style.display = 'none';
     el('keeper')!.style.display = 'block';
     el('diveLeft')!.style.display = 'none';
@@ -508,7 +512,7 @@ function initGame() {
   function beginAiTurn() {
     S.myTurn = false; resetField();
     const ind = el('turnIndicator');
-    if (ind) { ind.innerText='AI TURN 🤖'; ind.style.color='#ff3535'; }
+    if (ind) { ind.innerText='AI TURN \uD83E\uDD16'; ind.style.color='#ff3535'; }
     el('keeper')!.style.display='block';
     el('keeper')!.style.visibility='visible';
     el('ai-player')!.style.display='flex';
@@ -588,8 +592,8 @@ function initGame() {
     const t=el('resultTitle'); const e=el('resultEmoji'); const s=el('resultScore');
     const cg=el('statGoals'); const cs=el('statSaves');
     if (t) t.innerText=isWin?'VICTORY!':(isDraw?'DRAW':'DEFEAT');
-    if (e) e.innerText=isWin?'🏆':(isDraw?'🤝':'💀');
-    if (s) s.innerText=`${S.pScore} — ${S.aScore}`;
+    if (e) e.innerText=isWin?'\uD83C\uDFC6':(isDraw?'\uD83E\uDD1D':'\uD83D\uDC80');
+    if (s) s.innerText=`${S.pScore} \u2014 ${S.aScore}`;
     if (cg) cg.innerText=S.matchStats.goals.toString();
     if (cs) cs.innerText=S.matchStats.saves.toString();
     if (isWin) spawnConfetti();
@@ -601,7 +605,7 @@ function initGame() {
   }
 
   async function saveMatchResult(isWin: boolean, walletForSave: string) {
-    console.log('saveMatchResult — wallet:', walletForSave, 'fid:', S.fid, 'win:', isWin)
+    console.log('saveMatchResult \u2014 wallet:', walletForSave, 'fid:', S.fid, 'win:', isWin)
     try {
       const result = await supabase.rpc('upsert_player_stats', {
         p_wallet:     walletForSave,
@@ -645,7 +649,7 @@ function initGame() {
     const cont=el('leaderboardContent'); const myRank=el('myRankBar');
     if (!cont||!myRank) return;
     if (!data||data.length===0) {
-      cont.innerHTML=`<div class="placeholder-wrap"><div class="placeholder-emoji">🤷‍♂️</div><div class="placeholder-title">NO PLAYERS YET</div></div>`;
+      cont.innerHTML=`<div class="placeholder-wrap"><div class="placeholder-emoji">\uD83E\uDD37\u200D\u2642\uFE0F</div><div class="placeholder-title">NO PLAYERS YET</div></div>`;
       return;
     }
     let meFound: PlayerRow | null = null;
@@ -658,9 +662,9 @@ function initGame() {
       }
       html+=`
 <div style="display:flex;align-items:center;padding:10px 16px;gap:12px;border-bottom:1px solid #222;background:${i===0?'#1e2a1e':i===1?'#1e1e2a':i===2?'#2a1e1e':'transparent'};">
-  <div style="width:28px;text-align:center;font-weight:bold;color:#666;font-size:13px;">${i===0?'🥇':i===1?'🥈':i===2?'🥉':rank}</div>
+  <div style="width:28px;text-align:center;font-weight:bold;color:#666;font-size:13px;">${i===0?'\uD83E\uDD47':i===1?'\uD83E\uDD48':i===2?'\uD83E\uDD49':rank}</div>
   <div style="width:32px;height:32px;border-radius:50%;overflow:hidden;background:#333;flex-shrink:0;">
-    ${p.avatar_url?`<img src="${p.avatar_url}" style="width:100%;height:100%;object-fit:cover"/>`:`<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:16px">👤</div>`}
+    ${p.avatar_url?`<img src="${p.avatar_url}" style="width:100%;height:100%;object-fit:cover"/>`:`<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:16px">\uD83D\uDC64</div>`}
   </div>
   <div style="flex:1;min-width:0;">
     <div style="font-weight:bold;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.username||p.wallet_address.slice(0,6)+'...'+p.wallet_address.slice(-4)}</div>
@@ -690,7 +694,7 @@ function initGame() {
       <div class="lb-name">${name} <span class="lb-you-tag">(YOU)</span></div>
       <div style="text-align:right;margin-right:8px;">
         <div class="lb-wr">${score||0} pts</div>
-        <div style="font-family:Rajdhani,sans-serif;font-size:11px;color:#555;">${wr}% · ${wins}W</div>
+        <div style="font-family:Rajdhani,sans-serif;font-size:11px;color:#555;">${wr}% \u00b7 ${wins}W</div>
       </div>`;
   }
 
@@ -711,23 +715,28 @@ function initGame() {
     document.body.insertAdjacentHTML('beforeend',`
     <div id="onboardingOverlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;">
       <div style="background:#1a1a2e;border-radius:20px;padding:32px 24px;max-width:320px;width:100%;text-align:center;border:1px solid #333;color:white;font-family:sans-serif;">
-        <div style="font-size:48px;margin-bottom:16px">⚽</div>
+        <div style="font-size:48px;margin-bottom:16px">\u26bd</div>
         <div style="font-size:22px;font-weight:bold;color:#00ff88;margin-bottom:8px;">Welcome to Penalty Blitz!</div>
         <div style="font-size:14px;color:#aaa;line-height:1.6;margin-bottom:24px;">
           Compete in penalty shootouts and climb the global leaderboard.<br/><br/>
-          <b style="color:white">⚡ How to play:</b><br/>
-          🎯 <b>Shooting:</b> Aim your shot and choose power carefully<br/>
-          🧤 <b>Saving:</b> Watch the arrow and dive the right way<br/>
-          🏆 <b>Win</b> to earn points and rank up!
+          <b style="color:white">\u26a1 How to play:</b><br/>
+          \uD83C\uDFAF <b>Shooting:</b> Aim your shot and choose power carefully<br/>
+          \uD83E\uDDE4 <b>Saving:</b> Watch the arrow and dive the right way<br/>
+          \uD83C\uDFC6 <b>Win</b> to earn points and rank up!
         </div>
         <button onclick="localStorage.setItem('pb_onboarding_seen','1');document.getElementById('onboardingOverlay').remove();"
-          style="background:#00ff88;color:#000;border:none;border-radius:12px;padding:14px 32px;font-size:16px;font-weight:bold;cursor:pointer;width:100%;">Let's Play! ⚽</button>
+          style="background:#00ff88;color:#000;border:none;border-radius:12px;padding:14px 32px;font-size:16px;font-weight:bold;cursor:pointer;width:100%;">Let's Play! \u26bd</button>
       </div>
     </div>`)
     localStorage.setItem('pb_onboarding_seen','1')
   }
 
   async function showProfileScreen() {
+    // Hide all screens so menu topbar doesn't bleed through
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    const nav = document.getElementById('bottomNav');
+    if (nav) nav.style.display = 'flex';
+
     ['play','leaderboard','profile'].forEach(t=>{
       const e=document.getElementById(`tab-${t}`);
       if(e) e.style.color=t==='profile'?'#00ff88':'#888';
@@ -740,14 +749,14 @@ function initGame() {
     const rank=(count||0)+1;
     const existing=document.getElementById('screen-profile');if(existing)existing.remove();
     document.body.insertAdjacentHTML('beforeend',`
-    <div id="screen-profile" style="position:fixed;inset:0;background:linear-gradient(135deg,#0d0d1a 0%,#1a1a2e 100%);display:flex;flex-direction:column;align-items:center;padding:40px 20px 80px;overflow-y:auto;color:white;font-family:sans-serif;">
+    <div id="screen-profile" style="position:fixed;inset:0;background:linear-gradient(135deg,#0d0d1a 0%,#1a1a2e 100%);display:flex;flex-direction:column;align-items:center;padding:40px 20px 80px;overflow-y:auto;color:white;font-family:sans-serif;z-index:500;">
       <div style="width:80px;height:80px;border-radius:50%;overflow:hidden;border:3px solid #00ff88;background:#333;flex-shrink:0;margin-bottom:12px;">
-        ${S.avatarUrl?`<img src="${S.avatarUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;"/>`:`<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:32px">👤</div>`}
+        ${S.avatarUrl?`<img src="${S.avatarUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;"/>`:`<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:32px">\uD83D\uDC64</div>`}
       </div>
       <div style="font-size:20px;font-weight:bold;color:#00ff88;margin-bottom:20px;">${data?.username||S.username||'Anonymous'}</div>
-      <div style="background:#1e1e3a;border:1px solid #00ff88;border-radius:12px;padding:8px 24px;font-size:14px;color:#00ff88;margin-bottom:24px;">🏆 Rank #${rank}</div>
+      <div style="background:#1e1e3a;border:1px solid #00ff88;border-radius:12px;padding:8px 24px;font-size:14px;color:#00ff88;margin-bottom:24px;">\uD83C\uDFC6 Rank #${rank}</div>
       <div style="width:100%;max-width:320px;display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        ${([['Matches',data?.total_matches||0,'🎮'],['Wins',data?.total_wins||0,'✅'],['Losses',data?.total_losses||0,'❌'],['Win Rate',(data?.win_rate||0)+'%','📊'],['Goals',data?.total_goals_scored||0,'⚽'],['Score',data?.leaderboard_score||0,'⭐']] as [string,string|number,string][]).map(([l,v,ic])=>`
+        ${([['Matches',data?.total_matches||0,'\uD83C\uDFAE'],['Wins',data?.total_wins||0,'\u2705'],['Losses',data?.total_losses||0,'\u274C'],['Win Rate',(data?.win_rate||0)+'%','\uD83D\uDCCA'],['Goals',data?.total_goals_scored||0,'\u26BD'],['Score',data?.leaderboard_score||0,'\u2B50']] as [string,string|number,string][]).map(([l,v,ic])=>`
           <div style="background:#1e1e3a;border-radius:12px;padding:16px;text-align:center;border:1px solid #333;">
             <div style="font-size:20px">${ic}</div>
             <div style="font-size:22px;font-weight:bold;color:#00ff88;margin:4px 0;">${v}</div>
@@ -769,8 +778,8 @@ function initGame() {
 
   document.body.insertAdjacentHTML('beforeend',`
   <div id="bottomNav" style="position:fixed;bottom:0;left:0;right:0;height:64px;background:#1a1a2e;border-top:1px solid #333;display:flex;align-items:center;justify-content:space-around;z-index:1000;">
-    <button onclick="switchTab('play')" id="tab-play" style="flex:1;height:64px;background:none;border:none;color:#00ff88;font-size:11px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:44px;"><span style="font-size:20px">⚽</span><span>Play</span></button>
-    <button onclick="switchTab('leaderboard')" id="tab-leaderboard" style="flex:1;height:64px;background:none;border:none;color:#888;font-size:11px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:44px;"><span style="font-size:20px">🏆</span><span>Leaderboard</span></button>
-    <button onclick="switchTab('profile')" id="tab-profile" style="flex:1;height:64px;background:none;border:none;color:#888;font-size:11px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:44px;"><span style="font-size:20px">👤</span><span>Profile</span></button>
+    <button onclick="switchTab('play')" id="tab-play" style="flex:1;height:64px;background:none;border:none;color:#00ff88;font-size:11px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:44px;"><span class="tab-icon" style="font-size:20px">\u26BD</span><span>Play</span></button>
+    <button onclick="switchTab('leaderboard')" id="tab-leaderboard" style="flex:1;height:64px;background:none;border:none;color:#888;font-size:11px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:44px;"><span class="tab-icon" style="font-size:20px">\uD83C\uDFC6</span><span>Leaderboard</span></button>
+    <button onclick="switchTab('profile')" id="tab-profile" style="flex:1;height:64px;background:none;border:none;color:#888;font-size:11px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:44px;"><span class="tab-icon" style="font-size:20px">\uD83D\uDC64</span><span>Profile</span></button>
   </div>`)
 }
