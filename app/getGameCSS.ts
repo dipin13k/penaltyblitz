@@ -16,6 +16,76 @@ body {
   font-family: 'Rajdhani', sans-serif;
 }
 
+/* ── LIGHT MODE ── */
+body.light-mode {
+  background: #f0f2f5;
+}
+body.light-mode #app {
+  background: linear-gradient(180deg,#e8eaf6 0%,#dde3f0 100%);
+}
+body.light-mode .menu-topbar,
+body.light-mode .data-topbar {
+  background: rgba(255,255,255,0.85);
+}
+body.light-mode .menu-topbar-left .topbar-dot { background: #00cc66; }
+body.light-mode .topbar-username,
+body.light-mode .topbar-address { color: #222; }
+body.light-mode .menu-logo h1 { color: #111; text-shadow: 0 0 30px rgba(0,120,200,0.3); }
+body.light-mode .menu-logo h1 span { color: #0077cc; }
+body.light-mode .menu-logo p { color: #888; }
+body.light-mode .menu-stat-num { color: #111; }
+body.light-mode .menu-stat-lbl { color: #888; }
+body.light-mode .menu-stat-divider { background: #ccc; }
+body.light-mode .btn-secondary {
+  background: #fff;
+  border-color: #0077cc;
+  color: #111;
+}
+body.light-mode .connect-card,
+body.light-mode .username-card {
+  background: #fff;
+  border-color: #ddd;
+}
+body.light-mode .connect-card-title,
+body.light-mode .username-title { color: #111; }
+body.light-mode .connect-card-sub,
+body.light-mode .username-sub { color: #888; }
+body.light-mode .username-input {
+  background: #f5f5f5;
+  border-color: #ccc;
+  color: #111;
+}
+body.light-mode #scoreBar { background: rgba(255,255,255,0.9); }
+body.light-mode .score-label { color: #666; }
+body.light-mode .score-num { color: #111; }
+body.light-mode #net { background: #b8cce4; }
+body.light-mode .results-card {
+  background: #fff;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.1);
+}
+body.light-mode .stat-box { background: #f0f2f5; }
+body.light-mode .stat-lbl { color: #888; }
+body.light-mode .lb-content { background: transparent; }
+body.light-mode .lb-row { background: #fff; }
+body.light-mode .lb-name { color: #111; }
+body.light-mode .my-rank-bar {
+  background: linear-gradient(to top,#e8eaf6,rgba(232,234,246,0.95));
+  border-color: #ccc;
+}
+body.light-mode .data-title { color: #111; }
+body.light-mode .bottomNav-wrap {
+  background: #fff;
+  border-color: #ddd;
+}
+body.light-mode #bottomNav {
+  background: #fff !important;
+  border-color: #ddd !important;
+}
+body.light-mode #bottomNav button { color: #aaa !important; }
+body.light-mode #bottomNav button[style*='#00ff88'] { color: #00aa55 !important; }
+body.light-mode .diff-title { color: #111; }
+body.light-mode #pitch { background: #3a9e5c; }
+
 #app {
   width: 100%; max-width: 480px;
   height: 100vh;
