@@ -1,8 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY || process.env.NEXT_PUBLIC_NEYNAR_API_KEY || '';
-
-// Store notification tokens (in production use a DB — here we use Supabase via API)
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -15,7 +11,6 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { event, notificationDetails, fid } = body;
 
-    // User added the frame — save their notification token
     if (event === 'frame_added' && notificationDetails) {
       const { url, token } = notificationDetails;
       if (fid && token && url) {
@@ -27,7 +22,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
-    // User removed the frame — clear token
     if (event === 'frame_removed' && fid) {
       await supabase
         .from('player_profiles')
@@ -43,7 +37,6 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// Send notification helper — call this after a match
 export async function sendNotification(fid: number, title: string, body: string) {
   try {
     const { data } = await supabase
