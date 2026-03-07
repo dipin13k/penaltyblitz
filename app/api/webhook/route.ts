@@ -36,29 +36,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Internal error' }, { status: 500 });
   }
 }
-
-export async function sendNotification(fid: number, title: string, body: string) {
-  try {
-    const { data } = await supabase
-      .from('player_profiles')
-      .select('notification_token, notification_url')
-      .eq('fid', fid)
-      .maybeSingle();
-
-    if (!data?.notification_token || !data?.notification_url) return;
-
-    await fetch(data.notification_url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        notificationId: `pb-${fid}-${Date.now()}`,
-        title,
-        body,
-        targetUrl: 'https://penaltyblitz.vercel.app',
-        tokens: [data.notification_token],
-      }),
-    });
-  } catch (e) {
-    console.error('sendNotification error:', e);
-  }
-}
